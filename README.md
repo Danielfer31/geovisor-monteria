@@ -11,6 +11,8 @@ Geovisor urbano de Montería con la identidad de ColombIA · CIIAC (Centro Insti
 - **Obras y PDM**: obras comunicadas por la Alcaldía en Instagram, ubicadas en el mapa y vinculadas a metas del Plan de Desarrollo.
 - **SECOP**: proyectos candidatos de obra por año, sector y entidad, con línea de tiempo reproducible.
 - **Buscador** (`Ctrl K`) de barrios, comunas, equipamientos y obras.
+- **Organización tipo Google Maps**: categorías de equipamientos para filtrar, selector Mapa/Satélite, escala, ubicación propia y lente **Ambiente** con río, humedales y coberturas verdes.
+- **Asistente**: chat que responde con los datos del visor y lleva el mapa al lugar consultado. Con el servicio de `worker/` configurado en `config.js`, responde además con IA (Claude).
 
 Las fuentes, licencias y límites de interpretación están en el botón **Fuentes** del visor. Las comunas y el perímetro vienen de OpenStreetMap y no son límites oficiales del POT; las distancias son en línea recta.
 
@@ -19,6 +21,8 @@ Las fuentes, licencias y límites de interpretación están en el botón **Fuent
 | Ruta | Contenido |
 |---|---|
 | `index.html`, `app.css`, `app.js` | Interfaz del geovisor v2 |
+| `chat.js`, `config.js` | Asistente y su configuración (`chatUrl`) |
+| `worker/` | Servicio opcional del asistente con IA (Cloudflare Worker) |
 | `data/` | Capas y resúmenes que carga el visor |
 | `vendor/` | MapLibre GL JS 4.7.1 (licencia BSD-3, ver `vendor/LICENSE.txt`) |
 | `v1/index.html` | Instantánea publicada de la v1.0, fuente de los datos |

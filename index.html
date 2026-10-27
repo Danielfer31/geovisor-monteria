@@ -59,6 +59,20 @@
 
 <section id="kpis" aria-label="Indicadores de ciudad"></section>
 
+<nav id="categorias" aria-label="Filtrar equipamientos">
+  <button class="chip chip-cat" type="button" data-categoria="salud" aria-pressed="false"><i style="background:#FF5C8A"></i>Salud</button>
+  <button class="chip chip-cat" type="button" data-categoria="educacion" aria-pressed="false"><i style="background:#4FC3F7"></i>Educación</button>
+  <button class="chip chip-cat" type="button" data-categoria="seguridad" aria-pressed="false"><i style="background:#B39DFF"></i>Seguridad</button>
+  <button class="chip chip-cat" type="button" data-categoria="recreacion" aria-pressed="false"><i style="background:#5EE6A8"></i>Parques y recreación</button>
+  <button class="chip chip-cat" type="button" data-categoria="abastecimiento" aria-pressed="false"><i style="background:#FFB900"></i>Abastecimiento</button>
+  <button class="chip chip-cat" type="button" data-categoria="transporte" aria-pressed="false"><i style="background:#93A6C4"></i>Transporte</button>
+</nav>
+
+<div id="bases" class="vidrio" role="group" aria-label="Mapa base">
+  <button type="button" data-base="mapa" aria-pressed="true"><span class="miniatura miniatura-mapa"></span>Mapa</button>
+  <button type="button" data-base="satelite" aria-pressed="false"><span class="miniatura miniatura-sat"></span>Satélite</button>
+</div>
+
 <nav id="lentes" class="vidrio" aria-label="Lentes del mapa"></nav>
 
 <section id="leyenda" class="vidrio" aria-live="polite">
@@ -85,12 +99,15 @@
   <button class="asa" type="button" aria-label="Expandir o contraer el panel"></button>
   <div class="pestanas" role="tablist">
     <button class="pestana" role="tab" id="tab-territorio" aria-controls="vista-territorio" aria-selected="true">Territorio</button>
-    <button class="pestana" role="tab" id="tab-obras" aria-controls="vista-obras" aria-selected="false">Obras y PDM</button>
+    <button class="pestana" role="tab" id="tab-obras" aria-controls="vista-obras" aria-selected="false">Obras</button>
     <button class="pestana" role="tab" id="tab-secop" aria-controls="vista-secop" aria-selected="false">SECOP</button>
+    <button class="pestana pestana-ia" role="tab" id="tab-asistente" aria-controls="vista-asistente" aria-selected="false">
+      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>Asistente</button>
   </div>
   <div class="contenido" role="tabpanel" id="vista-territorio" aria-labelledby="tab-territorio"></div>
   <div class="contenido" role="tabpanel" id="vista-obras" aria-labelledby="tab-obras" hidden></div>
   <div class="contenido" role="tabpanel" id="vista-secop" aria-labelledby="tab-secop" hidden></div>
+  <div class="contenido contenido-chat" role="tabpanel" id="vista-asistente" aria-labelledby="tab-asistente" hidden></div>
 </aside>
 
 <section id="tiempo" class="vidrio" aria-label="Línea de tiempo de contratación">
@@ -128,6 +145,8 @@
 </div>
 
 <script src="vendor/maplibre-gl.js"></script>
+<script src="config.js"></script>
+<script src="chat.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

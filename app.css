@@ -274,3 +274,52 @@ button.tarjeta:hover { border-color: var(--borde); }
   .leyenda-eco { display: none; }
 }
 .lejos .etiqueta-comuna { display: none; }
+
+/* Categorías y mapa base (patrones de Google Maps) */
+#categorias {
+  position: absolute; top: 196px; left: 114px; right: 412px; z-index: 4;
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
+}
+.chip-cat { flex: none; min-height: 36px; padding: 6px 14px; background: var(--vidrio); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--texto); box-shadow: 0 4px 16px rgba(0, 6, 24, 0.4); }
+.chip-cat[aria-pressed="true"] { background: var(--ambar); color: var(--navy); border-color: var(--ambar); }
+.chip-cat[aria-pressed="true"] i { box-shadow: 0 0 0 2px var(--navy); }
+#bases { position: absolute; left: 430px; bottom: 96px; z-index: 4; display: flex; gap: 6px; padding: 6px; }
+#bases button { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; padding: 4px; border: 2px solid transparent; border-radius: 11px; background: transparent; font-size: 11px; color: var(--tenue); }
+#bases button[aria-pressed="true"] { border-color: var(--ambar); color: var(--texto); }
+.miniatura { width: 52px; height: 40px; border-radius: 7px; display: block; }
+.miniatura-mapa { background: linear-gradient(135deg, #000B22 0 30%, #0E4C80 30% 42%, #14532D 42% 60%, #1A2C55 60%); }
+.miniatura-sat { background: radial-gradient(circle at 30% 40%, #5b6b3a 0 20%, transparent 21%), radial-gradient(circle at 70% 70%, #7a6a4a 0 25%, transparent 26%), linear-gradient(160deg, #3d4f2d, #2c4a5a 55%, #5a5a43); }
+.maplibregl-ctrl-scale { background: rgba(0, 11, 34, 0.7); color: var(--tenue); border-color: var(--tenue); font-family: var(--mono); font-size: 10px; }
+.pestana { font-size: 12.5px; padding: 0 4px; }
+.pestana-ia { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--ambar); }
+
+/* Asistente */
+.contenido-chat { padding: 0; display: flex; flex-direction: column; }
+.contenido-chat[hidden] { display: none; }
+.chat { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.chat-mensajes { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+.msg { max-width: 92%; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45; }
+.msg p { margin: 0 0 6px; } .msg p:last-child { margin-bottom: 0; }
+.msg ul { margin: 4px 0 6px; padding-left: 18px; } .msg li { margin: 2px 0; }
+.msg strong { color: var(--blanco); }
+.msg-usuario { align-self: flex-end; background: var(--azul); color: #fff; border-bottom-right-radius: 4px; }
+.msg-asistente { align-self: flex-start; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--borde); border-bottom-left-radius: 4px; }
+.msg-pie { margin-top: 8px; font-size: 10.5px; color: var(--sutil); }
+.chat-sugerencias { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 8px; scrollbar-width: none; }
+.chat-sugerencias .chip { flex: none; }
+.chat-form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--borde); }
+.chat-form input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--borde); background: rgba(255, 255, 255, 0.05); outline: none; }
+.chat-form input:focus { border-color: var(--borde-activo); }
+.chat-form button { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: var(--ambar); color: var(--navy); display: grid; place-items: center; }
+.chat-form svg { width: 18px; height: 18px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.escribiendo span { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--tenue); animation: latido 1s infinite; }
+.escribiendo span:nth-child(2) { animation-delay: 0.2s; } .escribiendo span:nth-child(3) { animation-delay: 0.4s; }
+
+@media (max-width: 1180px) { #categorias { top: 280px; } #bases { left: 114px; bottom: auto; top: 340px; } }
+@media (max-width: 760px) {
+  #categorias { display: none; }
+  #bases { left: auto; right: 10px; top: 188px; bottom: auto; padding: 4px; }
+  #bases button[aria-pressed="true"] { display: none; }
+  #bases button { width: 52px; font-size: 10px; } .miniatura { width: 40px; height: 30px; }
+}
