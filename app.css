@@ -19,6 +19,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--noche); color: var(--texto); font-family: var(--sans); overflow: hidden; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -246,3 +247,30 @@ button.tarjeta:hover { border-color: var(--borde); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Interacción del mapa */
+.tooltip {
+  position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; max-width: 260px;
+  padding: 8px 11px; border-radius: 10px; background: var(--vidrio-fuerte); border: 1px solid var(--borde);
+  backdrop-filter: blur(12px); font-size: 12px; box-shadow: 0 8px 24px rgba(0, 6, 24, 0.5);
+}
+.tooltip b { display: block; font-size: 13px; }
+.tooltip span { display: block; color: var(--tenue); margin-top: 1px; }
+.tooltip em { display: block; font-style: normal; font-family: var(--mono); color: var(--ambar); margin-top: 4px; }
+.etiqueta-comuna {
+  min-width: 34px; height: 26px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--blanco); background: rgba(0, 26, 79, 0.75); border: 1px solid rgba(251, 250, 246, 0.35);
+  backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgba(0, 6, 24, 0.5); transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.etiqueta-comuna:hover, .etiqueta-comuna.activa { background: var(--ambar); color: var(--navy); border-color: var(--ambar); }
+.leyenda-eco { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; font-size: 12px; color: #C4D1E6; }
+.leyenda-eco li { display: flex; align-items: center; gap: 8px; }
+.leyenda-eco i { width: 18px; height: 12px; border-radius: 3px; border: 1.5px solid; flex: none; }
+#orbitar[aria-pressed="true"] svg { animation: girar 2.4s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (max-width: 760px) {
+  #orbitar, #vista-inicial { display: none; }
+  .etiqueta-comuna { height: 22px; font-size: 10px; min-width: 28px; }
+  .leyenda-eco { display: none; }
+}
+.lejos .etiqueta-comuna { display: none; }

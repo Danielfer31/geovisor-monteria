@@ -13,10 +13,12 @@
     salud: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",
     educacion: "M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5",
     seguridad: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
-    estrato: "M4 20h4v-6H4zM10 20h4V9h-4zM16 20h4V4h-4z"
+    estrato: "M4 20h4v-6H4zM10 20h4V9h-4zM16 20h4V4h-4z",
+    ambiente: "M5 21c0-9 5-15 15-16-1 10-6 15-15 16zM5 21l8-8"
   };
 
   var LENTES = [
+    { id: "ambiente", nombre: "Ambiente", campo: null, titulo: "Estructura ecológica", unidad: "", nota: "Río, humedales y coberturas verdes de OpenStreetMap; no son límites oficiales del POT" },
     { id: "densidad", nombre: "Densidad", campo: "densidad_hab_ha", titulo: "Densidad de población", unidad: "hab/ha", nota: "Personas por hectárea · Censo DANE 2018" },
     { id: "acueducto", nombre: "Acueducto", campo: "pct_sin_acueducto", titulo: "Viviendas sin acueducto", unidad: "%", nota: "Porcentaje de viviendas · Censo DANE 2018" },
     { id: "alcantarillado", nombre: "Alcantarillado", campo: "pct_sin_alcantarillado", titulo: "Viviendas sin alcantarillado", unidad: "%", nota: "Porcentaje de viviendas · Censo DANE 2018" },
@@ -104,6 +106,7 @@
   function calcularCortes() {
     var fs = datos.manzanas.features;
     LENTES.forEach(function (l) {
+      if (!l.campo) return;
       var vals = fs.map(function (f) { return f.properties[l.campo]; })
         .filter(function (v) { return v != null && !isNaN(v); }).sort(function (a, b) { return a - b; });
       var c = [0, 0.25, 0.5, 0.75, 0.96].map(function (q) { return cuantil(vals, q); });
@@ -115,14 +118,16 @@
   }
   function expresionColor() {
     var l = lenteActual(), c = estado.cortes[l.id];
+    if (!l.campo) return ["case", ["boolean", ["feature-state", "sel"], false], COLORES.blanco,
+      ["boolean", ["feature-state", "hover"], false], "#FFE08A", "#3A5A99"];
     var expr = ["interpolate", ["linear"], ["coalesce", ["get", l.campo], c[0]]];
     c.forEach(function (v, i) { expr.push(v, RAMPA[i]); });
     return ["case", ["boolean", ["feature-state", "sel"], false], COLORES.blanco,
       ["boolean", ["feature-state", "hover"], false], "#FFE08A", expr];
   }
   function expresionAltura() {
-    if (!estado.tres_d) return 0;
     var l = lenteActual(), c = estado.cortes[l.id];
+    if (!estado.tres_d || !l.campo) return 0;
     var h = ["interpolate", ["linear"], ["coalesce", ["get", l.campo], c[0]],
       c[0], 4, c[2], ALTURA_MAX * 0.3, c[4], ALTURA_MAX];
     // Al acercarse la altura se reduce para que las manzanas sigan leyéndose como relieve
@@ -130,33 +135,87 @@
   }
 
   // ---------- Mapa ----------
+  // Mapa base vectorial (OpenFreeMap, esquema OpenMapTiles): permite dibujar el agua,
+  // los humedales y las coberturas verdes con estilo propio en lugar de una imagen fija.
+  var ECO = {
+    agua: { color: "#0E4C80", borde: "#4FC3F7", nombre: "Río y cuerpos de agua" },
+    humedal: { color: "#0E5A5A", borde: "#2DD4BF", nombre: "Humedales y ciénagas" },
+    bosque: { color: "#14532D", borde: "#5EE6A8", nombre: "Bosques y rondas arboladas" },
+    verde: { color: "#1C4A2E", borde: "#86EFAC", nombre: "Parques y zonas verdes" }
+  };
+  var CAPAS_ECO = ["eco-agua", "eco-humedal", "eco-bosque", "eco-verde"];
+  function estiloBase() {
+    return {
+      version: 8,
+      glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+      sources: {},
+      layers: [{ id: "fondo", type: "background", paint: { "background-color": "#000B22" } }]
+    };
+  }
+  // El mapa base se agrega después de cargar el visor: si OpenFreeMap no responde,
+  // el geovisor sigue funcionando con sus propias capas sobre fondo liso.
+  function montarBase(antesDe) {
+    mapa.addSource("omt", {
+      type: "vector", url: "https://tiles.openfreemap.org/planet",
+      attribution: '© <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · DANE 2018'
+    });
+    capasBase().forEach(function (c) { mapa.addLayer(c, antesDe); });
+  }
+  function capasBase() {
+    var verde = ["park", "grass", "garden", "recreation_ground", "meadow", "pitch", "cemetery"];
+    return [
+        { id: "eco-bosque", type: "fill", source: "omt", "source-layer": "landcover", filter: ["in", ["get", "class"], ["literal", ["wood", "forest"]]],
+          paint: { "fill-color": ECO.bosque.color, "fill-opacity": 0.55, "fill-opacity-transition": { duration: 600 } } },
+        { id: "eco-verde", type: "fill", source: "omt", "source-layer": "landcover", filter: ["in", ["get", "class"], ["literal", ["grass", "farmland"]]],
+          paint: { "fill-color": ECO.verde.color, "fill-opacity": 0.35, "fill-opacity-transition": { duration: 600 } } },
+        { id: "eco-parque", type: "fill", source: "omt", "source-layer": "park",
+          paint: { "fill-color": ECO.verde.color, "fill-opacity": 0.6, "fill-outline-color": ECO.verde.borde } },
+        { id: "eco-verde-uso", type: "fill", source: "omt", "source-layer": "landuse", filter: ["in", ["get", "class"], ["literal", verde]],
+          paint: { "fill-color": ECO.verde.color, "fill-opacity": 0.5 } },
+        { id: "eco-humedal", type: "fill", source: "omt", "source-layer": "landcover", filter: ["==", ["get", "class"], "wetland"],
+          paint: { "fill-color": ECO.humedal.color, "fill-opacity": 0.7, "fill-opacity-transition": { duration: 600 } } },
+        { id: "eco-humedal-borde", type: "line", source: "omt", "source-layer": "landcover", filter: ["==", ["get", "class"], "wetland"],
+          paint: { "line-color": ECO.humedal.borde, "line-width": 1, "line-opacity": 0.6, "line-dasharray": [3, 2] } },
+        { id: "eco-agua", type: "fill", source: "omt", "source-layer": "water",
+          paint: { "fill-color": ECO.agua.color, "fill-opacity": 0.95 } },
+        { id: "eco-agua-borde", type: "line", source: "omt", "source-layer": "water",
+          paint: { "line-color": ECO.agua.borde, "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.6, 16, 2], "line-opacity": 0.8, "line-blur": 0.5 } },
+        { id: "eco-cauces", type: "line", source: "omt", "source-layer": "waterway", filter: ["!=", ["get", "class"], "river"],
+          paint: { "line-color": "#38BDF8", "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.6, 16, 2.5], "line-opacity": 0.7 } },
+        { id: "vias-menores", type: "line", source: "omt", "source-layer": "transportation", minzoom: 13,
+          filter: ["in", ["get", "class"], ["literal", ["minor", "service", "tertiary"]]],
+          paint: { "line-color": "#1A2C55", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 0.4, 17, 3] } },
+        { id: "vias-principales", type: "line", source: "omt", "source-layer": "transportation",
+          filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]],
+          paint: { "line-color": "#2A4A8A", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 16, 4], "line-opacity": 0.85 } },
+        { id: "nombres-agua", type: "symbol", source: "omt", "source-layer": "water_name",
+          layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Italic"], "text-size": 12, "symbol-placement": "line" },
+          paint: { "text-color": "#7DD3FC", "text-halo-color": "#000B22", "text-halo-width": 1.5 } },
+        { id: "nombres-cauces", type: "symbol", source: "omt", "source-layer": "waterway", minzoom: 12,
+          layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Italic"], "text-size": 12, "symbol-placement": "line", "text-letter-spacing": 0.08 },
+          paint: { "text-color": "#7DD3FC", "text-halo-color": "#000B22", "text-halo-width": 1.5 } }
+    ];
+  }
+
   function crearMapa() {
     var b = new maplibregl.LngLatBounds();
     datos.manzanas.features.forEach(function (f) { f.geometry.coordinates[0].forEach(function (p) { b.extend(p); }); });
     estado.limites = b;
     mapa = new maplibregl.Map({
       container: "mapa",
-      style: {
-        version: 8,
-        sources: {
-          base: {
-            type: "raster", tileSize: 256,
-            tiles: ["a", "b", "c", "d"].map(function (s) { return "https://" + s + ".basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"; }),
-            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · DANE 2018'
-          }
-        },
-        layers: [
-          { id: "fondo", type: "background", paint: { "background-color": "#000B22" } },
-          { id: "base", type: "raster", source: "base", paint: { "raster-opacity": 0.55, "raster-saturation": -0.4, "raster-hue-rotate": 12, "raster-brightness-max": 0.85 } }
-        ]
-      },
+      style: estiloBase(),
       bounds: b, fitBoundsOptions: { padding: paddingMapa() },
+      maxBounds: [[b.getWest() - 0.35, b.getSouth() - 0.3], [b.getEast() + 0.35, b.getNorth() + 0.3]],
       pitch: 55, bearing: -18, maxPitch: 75, attributionControl: false, antialias: true
     });
+    mapa.on("error", function (e) { if (console && console.warn) console.warn("Mapa:", e && e.error && e.error.message); });
     mapa.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     mapa.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
     mapa.on("load", function () {
-      if (window.innerWidth > 760) mapa.setZoom(mapa.getZoom() + 0.45);
+      mapa.setZoom(mapa.getZoom() + (window.innerWidth > 760 ? 0.45 : 0.3));
+      // En pantallas pequeñas las etiquetas de comuna solo aparecen al acercarse
+      var etiquetas = function () { document.body.classList.toggle("lejos", window.innerWidth <= 760 && mapa.getZoom() < 12.6); };
+      mapa.on("zoom", etiquetas); etiquetas();
       montarCapas();
     });
   }
@@ -167,7 +226,7 @@
 
   function montarCapas() {
     mapa.addSource("perimetro", { type: "geojson", data: datos.contexto.perimetro });
-    mapa.addSource("comunas", { type: "geojson", data: datos.contexto.comunas });
+    mapa.addSource("comunas", { type: "geojson", data: datos.contexto.comunas, promoteId: "comuna_id" });
     mapa.addSource("rio", { type: "geojson", data: datos.contexto.rio });
     mapa.addSource("manzanas", { type: "geojson", data: datos.manzanas, promoteId: "cod_dane" });
     mapa.addSource("equipamientos", { type: "geojson", data: datos.equipamientos });
@@ -175,9 +234,17 @@
 
     mapa.addLayer({ id: "perimetro-brillo", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 8, "line-blur": 8, "line-opacity": 0.35 } });
     mapa.addLayer({ id: "perimetro", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 1.2, "line-opacity": 0.8 } });
-    mapa.addLayer({ id: "rio-brillo", type: "line", source: "rio", paint: { "line-color": "#38BDF8", "line-width": 18, "line-blur": 14, "line-opacity": 0.45 } });
-    mapa.addLayer({ id: "rio", type: "line", source: "rio", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#7DD3FC", "line-width": 3, "line-opacity": 0.95 } });
-    mapa.addLayer({ id: "comunas", type: "line", source: "comunas", paint: { "line-color": COLORES.blanco, "line-width": 1, "line-opacity": 0.45, "line-dasharray": [2, 2] } });
+    mapa.addLayer({ id: "rio-brillo", type: "line", source: "rio", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#38BDF8", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 14, 16, 60], "line-blur": ["interpolate", ["linear"], ["zoom"], 11, 10, 16, 40], "line-opacity": 0.35 } });
+    mapa.addLayer({ id: "rio", type: "line", source: "rio", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#7DD3FC", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 2.5, 16, 5], "line-opacity": 0.9 } });
+    mapa.addLayer({ id: "rio-flujo", type: "line", source: "rio", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#E0F7FF", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.2, 16, 2.5], "line-opacity": 0.85, "line-dasharray": [0, 4, 3] } });
+    mapa.addLayer({ id: "comunas-relleno", type: "fill", source: "comunas",
+      paint: { "fill-color": COLORES.ambar, "fill-opacity": ["case", ["boolean", ["feature-state", "sel"], false], 0.12, ["boolean", ["feature-state", "hover"], false], 0.05, 0] } });
+    mapa.addLayer({ id: "comunas", type: "line", source: "comunas",
+      paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], COLORES.ambar, COLORES.blanco],
+        "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.5, 1.2], "line-opacity": 0.7 } });
     mapa.addLayer({
       id: "manzanas", type: "fill-extrusion", source: "manzanas",
       paint: {
@@ -219,7 +286,11 @@
       popup(e.features[0].geometry.coordinates, "<b>" + escapar(p.nombre || "Sin nombre") + "</b><br><span style='color:#93A6C4'>" + escapar(CATEGORIAS[p.categoria] || p.categoria) + " · OSM</span>");
     });
 
+    montarBase("perimetro-brillo");
+    etiquetasComunas();
+    enlazarInteraccionMapa();
     animarObras();
+    animarRio();
     $("#carga").classList.add("listo");
   }
 
@@ -245,13 +316,130 @@
     requestAnimationFrame(paso);
   }
 
+  // Flujo del río: se recorre una secuencia de patrones de guiones para simular corriente
+  function animarRio() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var pasos = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0],
+      [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
+    var i = 0;
+    setInterval(function () { i = (i + 1) % pasos.length; mapa.setPaintProperty("rio-flujo", "line-dasharray", pasos[i]); }, 90);
+  }
+
+  function centroComuna(f) {
+    var pols = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    var mayor = pols.reduce(function (a, p) { return p[0].length > a[0].length ? p : a; });
+    var x = 0, y = 0;
+    mayor[0].forEach(function (q) { x += q[0]; y += q[1]; });
+    return [x / mayor[0].length, y / mayor[0].length];
+  }
+  function etiquetasComunas() {
+    datos.contexto.comunas.features.forEach(function (f) {
+      var id = f.properties.comuna_id;
+      var n = el("button", { class: "etiqueta-comuna", type: "button", "aria-label": "Ver " + f.properties.nombre, texto: (f.properties.nombre || "").replace("Comuna ", "C") });
+      n.addEventListener("click", function (e) { e.stopPropagation(); mostrarPestana("territorio"); pintarComuna(id); });
+      n.dataset.comuna = id;
+      new maplibregl.Marker({ element: n }).setLngLat(centroComuna(f)).addTo(mapa);
+      n.setAttribute("aria-label", "Ver " + f.properties.nombre);
+    });
+  }
+  var comunaSel = null;
+  function marcarComuna(id) {
+    if (comunaSel !== null) mapa.setFeatureState({ source: "comunas", id: comunaSel }, { sel: false });
+    comunaSel = id;
+    if (id !== null) mapa.setFeatureState({ source: "comunas", id: id }, { sel: true });
+    document.querySelectorAll(".etiqueta-comuna").forEach(function (b) { b.classList.toggle("activa", b.dataset.comuna === id); });
+  }
+  function nombreComuna(id) {
+    var c = datos.resumen.resumen.comunas.filter(function (x) { return x.comuna_id === id; })[0];
+    return c ? c.nombre : "";
+  }
+
+  function enlazarInteraccionMapa() {
+    var tip = $("#tooltip"), escritorio = window.matchMedia("(hover: hover)").matches;
+    mapa.on("mousemove", function (e) {
+      if (!escritorio) return;
+      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "manzanas"].concat(CAPAS_ECO) })[0];
+      if (!f) { tip.hidden = true; return; }
+      var html;
+      if (f.layer.id === "manzanas") {
+        var l = lenteActual(), p = f.properties;
+        html = "<b>" + escapar(p.barrio ? "Cerca de " + p.barrio : "Manzana") + "</b><span>" + escapar(nombreComuna(p.comuna_id)) + "</span>" +
+          (l.campo ? "<em>" + escapar(l.titulo) + ": " + (p[l.campo] == null ? "s. d." : num(p[l.campo], l.unidad === "%" ? 1 : 0) + (l.unidad ? " " + l.unidad : "")) + "</em>" : "<em>" + num(p.personas) + " personas</em>");
+      } else if (f.layer.id === "obras") {
+        html = "<b>" + escapar(f.properties.nombre) + "</b><span>Obra comunicada · clic para ver</span>";
+      } else if (f.layer.id === "equipamientos") {
+        html = "<b>" + escapar(f.properties.nombre || "Sin nombre") + "</b><span>" + escapar(CATEGORIAS[f.properties.categoria] || "") + "</span>";
+      } else {
+        var eco = ECO[f.layer.id.replace("eco-", "")];
+        html = "<b>" + escapar(f.properties.name || eco.nombre) + "</b><span>" + escapar(eco.nombre) + " · OSM</span>";
+      }
+      tip.innerHTML = html; tip.hidden = false;
+      tip.style.transform = "translate(" + (e.point.x + 16) + "px," + (e.point.y + 16) + "px)";
+    });
+    mapa.getCanvas().addEventListener("mouseleave", function () { tip.hidden = true; });
+    mapa.on("movestart", function () { tip.hidden = true; });
+
+    mapa.on("mousemove", "comunas-relleno", function (e) {
+      var id = e.features[0].id;
+      if (estado.comunaHover !== undefined && estado.comunaHover !== id) mapa.setFeatureState({ source: "comunas", id: estado.comunaHover }, { hover: false });
+      estado.comunaHover = id; mapa.setFeatureState({ source: "comunas", id: id }, { hover: true });
+    });
+    mapa.on("mouseleave", "comunas-relleno", function () {
+      if (estado.comunaHover !== undefined) mapa.setFeatureState({ source: "comunas", id: estado.comunaHover }, { hover: false });
+      estado.comunaHover = undefined;
+    });
+
+    mapa.on("click", function (e) {
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "manzanas"] }).length) return;
+      var f = mapa.queryRenderedFeatures(e.point, { layers: CAPAS_ECO })[0];
+      if (!f) return;
+      var eco = ECO[f.layer.id.replace("eco-", "")];
+      popup(e.lngLat, "<b>" + escapar(f.properties.name || eco.nombre) + "</b><br><span style='color:" + eco.borde + "'>" + escapar(eco.nombre) + "</span><br><span style='color:#93A6C4'>Cobertura OpenStreetMap · no es un límite oficial</span>");
+    });
+
+    $("#vista-inicial").addEventListener("click", function () {
+      detenerOrbita();
+      mapa.fitBounds(estado.limites, { padding: paddingMapa(), pitch: estado.tres_d ? 55 : 0, bearing: estado.tres_d ? -18 : 0, duration: 1600 });
+      marcarComuna(null); pintarCiudad();
+    });
+    $("#orbitar").addEventListener("click", function () {
+      if (estado.orbita) { detenerOrbita(); return; }
+      this.setAttribute("aria-pressed", "true");
+      if (!estado.tres_d) $("#modo-3d").click();
+      var girar = function () {
+        if (!estado.orbita) return;
+        mapa.easeTo({ bearing: mapa.getBearing() + 8, duration: 1000, easing: function (t) { return t; } });
+      };
+      estado.orbita = true; girar();
+      mapa.on("moveend", girar);
+      estado.girar = girar;
+      ["mousedown", "touchstart", "wheel"].forEach(function (ev) { mapa.getCanvas().addEventListener(ev, detenerOrbita, { once: true }); });
+    });
+  }
+  function detenerOrbita() {
+    if (!estado.orbita) return;
+    estado.orbita = false;
+    mapa.off("moveend", estado.girar);
+    $("#orbitar").setAttribute("aria-pressed", "false");
+  }
+
   function aplicarLente() {
     var l = lenteActual(), c = estado.cortes[l.id];
     if (mapa && mapa.getLayer("manzanas")) {
       mapa.setPaintProperty("manzanas", "fill-extrusion-color", expresionColor());
       mapa.setPaintProperty("manzanas", "fill-extrusion-height", expresionAltura());
+      mapa.setPaintProperty("manzanas", "fill-extrusion-opacity", l.campo ? 0.88 : 0.22);
+      mapa.setPaintProperty("eco-bosque", "fill-opacity", l.campo ? 0.55 : 0.85);
+      mapa.setPaintProperty("eco-verde", "fill-opacity", l.campo ? 0.35 : 0.7);
+      mapa.setPaintProperty("eco-humedal", "fill-opacity", l.campo ? 0.7 : 0.95);
     }
     $("#leyenda-titulo").textContent = l.titulo;
+    $("#leyenda-eco").hidden = !!l.campo;
+    $(".rampa-etiquetas").hidden = !l.campo;
+    $("#leyenda-rampa").hidden = !l.campo;
+    $("#leyenda-nota").textContent = l.nota;
+    document.querySelectorAll(".lente").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.lente === l.id ? "true" : "false"); });
+    if (!l.campo) return;
     $("#leyenda-rampa").style.background = "linear-gradient(90deg," + RAMPA.join(",") + ")";
     $("#leyenda-min").textContent = num(c[0], l.unidad === "%" ? 0 : 0) + (l.unidad ? " " + l.unidad : "");
     $("#leyenda-max").textContent = "≥ " + num(c[4]) + (l.unidad ? " " + l.unidad : "");
@@ -284,7 +472,7 @@
       cont.appendChild(el("button", {
         class: "lente", type: "button", "data-lente": l.id, "aria-pressed": "false",
         html: icono(ICONOS[l.id]) + "<span>" + l.nombre + "</span>",
-        onclick: function () { estado.lente = l.id; aplicarLente(); if (estado.seleccion) pintarManzana(estado.seleccion); }
+        onclick: function () { estado.lente = l.id; aplicarLente(); if (estado.seleccion && lenteActual().campo) pintarManzana(estado.seleccion); }
       }));
     });
   }
@@ -366,6 +554,7 @@
 
   function pintarCiudad() {
     limpiarSeleccion();
+    if (mapa && mapa.getSource("comunas")) marcarComuna(null);
     var m = datos.resumen.resumen.municipio, v = $("#vista-territorio");
     v.innerHTML = "";
     var cont = el("div", { class: "aparecer" }, [
@@ -401,6 +590,7 @@
 
   function pintarComuna(id) {
     limpiarSeleccion();
+    marcarComuna(id);
     var c = datos.resumen.resumen.comunas.filter(function (x) { return x.comuna_id === id; })[0];
     var f = datos.contexto.comunas.features.filter(function (x) { return x.properties.comuna_id === id; })[0];
     if (f) {
@@ -443,7 +633,7 @@
   function pintarManzana(p) {
     var comuna = datos.resumen.resumen.comunas.filter(function (x) { return x.comuna_id === p.comuna_id; })[0];
     var med = estado.medianas, max = Math.max(1500, p.dist_salud_m || 0, p.dist_educacion_m || 0, p.dist_seguridad_m || 0);
-    var l = lenteActual(), val = p[l.campo];
+    var l = lenteActual().campo ? lenteActual() : LENTES[1], val = p[l.campo];
     var v = $("#vista-territorio"); v.innerHTML = "";
     v.appendChild(el("div", { class: "aparecer" }, [
       volver(),
