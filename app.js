@@ -14,10 +14,12 @@
     educacion: "M2 9l10-5 10 5-10 5zM6 11v5c3 2.5 9 2.5 12 0v-5",
     seguridad: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
     estrato: "M4 20h4v-6H4zM10 20h4V9h-4zM16 20h4V4h-4z",
-    ambiente: "M5 21c0-9 5-15 15-16-1 10-6 15-15 16zM5 21l8-8"
+    ambiente: "M5 21c0-9 5-15 15-16-1 10-6 15-15 16zM5 21l8-8",
+    necesidad: "M12 2l2.6 6.3L21 9l-5 4.4L17.5 20 12 16.6 6.5 20 8 13.4 3 9l6.4-.7z"
   };
 
   var LENTES = [
+    { id: "necesidad", nombre: "Prioridad", campo: "necesidad", fijos: [0, 20, 40, 60, 80], titulo: "Índice de necesidad", unidad: "pts", nota: "0 a 100 · combina carencias de servicios y distancia a equipamientos con los pesos elegidos" },
     { id: "ambiente", nombre: "Ambiente", campo: null, titulo: "Estructura ecológica", unidad: "", nota: "Río, humedales y coberturas verdes de OpenStreetMap; no son límites oficiales del POT" },
     { id: "densidad", nombre: "Densidad", campo: "densidad_hab_ha", titulo: "Densidad de población", unidad: "hab/ha", nota: "Personas por hectárea · Censo DANE 2018" },
     { id: "acueducto", nombre: "Acueducto", campo: "pct_sin_acueducto", titulo: "Viviendas sin acueducto", unidad: "%", nota: "Porcentaje de viviendas · Censo DANE 2018" },
@@ -107,6 +109,11 @@
     var fs = datos.manzanas.features;
     LENTES.forEach(function (l) {
       if (!l.campo) return;
+      if (l.fijos) {
+        var v2 = fs.map(function (f) { return f.properties[l.campo]; }).filter(function (v) { return v != null; }).sort(function (a, b) { return a - b; });
+        estado.cortes[l.id] = l.fijos; estado.medianas[l.id] = cuantil(v2, 0.5);
+        return;
+      }
       var vals = fs.map(function (f) { return f.properties[l.campo]; })
         .filter(function (v) { return v != null && !isNaN(v); }).sort(function (a, b) { return a - b; });
       var c = [0, 0.25, 0.5, 0.75, 0.96].map(function (q) { return cuantil(vals, q); });
@@ -385,7 +392,7 @@
   }
   function nombreComuna(id) {
     var c = datos.resumen.resumen.comunas.filter(function (x) { return x.comuna_id === id; })[0];
-    return c ? c.nombre : "";
+    return c ? c.nombre : "Fuera de las comunas OSM";
   }
 
   function enlazarInteraccionMapa() {
@@ -511,7 +518,11 @@
       cont.appendChild(el("button", {
         class: "lente", type: "button", "data-lente": l.id, "aria-pressed": "false",
         html: icono(ICONOS[l.id]) + "<span>" + l.nombre + "</span>",
-        onclick: function () { estado.lente = l.id; aplicarLente(); if (estado.seleccion && lenteActual().campo) pintarManzana(estado.seleccion); }
+        onclick: function () {
+          estado.lente = l.id; aplicarLente();
+          if (l.id === "necesidad") { limpiarSimulacion(); pintarNecesidad(); }
+          else if (estado.seleccion && lenteActual().campo) pintarManzana(estado.seleccion);
+        }
       }));
     });
   }
@@ -944,12 +955,18 @@
       "p=" + Math.round(mapa.getPitch()), "b=" + Math.round(mapa.getBearing())];
     if (estado.comunaVista) partes.push("comuna=" + estado.comunaVista);
     if (estado.base === "satelite") partes.push("base=satelite");
+    if (estado.lente === "necesidad") partes.push("pesos=" + COMPONENTES.map(function (c) { return estado.pesos[c.id]; }).join(""));
     try { history.replaceState(null, "", "#" + partes.join("&")); } catch (e) { /* vista sin historial */ }
   }
   function leerVistaURL() {
     var h = {};
     location.hash.replace(/^#/, "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) h[p[0]] = decodeURIComponent(p[1] || ""); });
+    if (h.pesos && /^[0-5]{8}$/.test(h.pesos)) {
+      COMPONENTES.forEach(function (c, i) { estado.pesos[c.id] = Number(h.pesos[i]); });
+      calcularIndice(); mapa.getSource("manzanas").setData(datos.manzanas);
+    }
     if (h.lente && LENTES.some(function (l) { return l.id === h.lente; })) { estado.lente = h.lente; aplicarLente(); }
+    if (h.lente === "necesidad" && !h.comuna) pintarNecesidad();
     if (h.base === "satelite") fijarBase("satelite");
     if (h.comuna) { pintarComuna(h.comuna); return; }
     if (h.c && h.z) {
@@ -1034,6 +1051,150 @@
       r.appendChild(el("footer", { class: "rep-pie", texto: "Fuentes: Censo DANE 2018 por manzana; comunas, barrios y equipamientos de OpenStreetMap (no son límites ni registros oficiales); distancias en línea recta. Consulte la vista en línea: " + location.href }));
       setTimeout(function () { window.print(); }, 150);
     });
+  }
+
+  // ---------- Índice de necesidad por manzana ----------
+  // Cada componente se normaliza a 0-1 (porcentajes /100; distancias /2 km con tope) y el
+  // índice es su promedio ponderado ×100. Los pesos los ajusta quien consulta.
+  var COMPONENTES = [
+    { id: "alc", nombre: "Sin alcantarillado", campo: "pct_sin_alcantarillado", tipo: "pct" },
+    { id: "acu", nombre: "Sin acueducto", campo: "pct_sin_acueducto", tipo: "pct" },
+    { id: "rec", nombre: "Sin recolección de basuras", campo: "pct_sin_recoleccion", tipo: "pct" },
+    { id: "int", nombre: "Sin internet", campo: "pct_sin_internet", tipo: "pct" },
+    { id: "sal", nombre: "Lejos de salud", campo: "dist_salud_m", tipo: "dist" },
+    { id: "edu", nombre: "Lejos de educación", campo: "dist_educacion_m", tipo: "dist" },
+    { id: "seg", nombre: "Lejos de seguridad", campo: "dist_seguridad_m", tipo: "dist" },
+    { id: "est", nombre: "Estrato bajo", campo: "estrato_modal", tipo: "estrato" }
+  ];
+  var PRESETS = {
+    "Equilibrado": { alc: 3, acu: 3, rec: 2, int: 1, sal: 3, edu: 2, seg: 2, est: 2 },
+    "Servicios básicos": { alc: 5, acu: 5, rec: 3, int: 0, sal: 0, edu: 0, seg: 0, est: 1 },
+    "Acceso a equipamientos": { alc: 0, acu: 0, rec: 0, int: 0, sal: 5, edu: 4, seg: 3, est: 1 },
+    "Brecha digital": { alc: 0, acu: 0, rec: 0, int: 5, sal: 0, edu: 2, seg: 0, est: 2 }
+  };
+  estado.pesos = Object.assign({}, PRESETS["Equilibrado"]);
+  function normal(c, v) {
+    if (v == null || isNaN(v)) return null;
+    if (c.tipo === "pct") return Math.max(0, Math.min(1, v / 100));
+    if (c.tipo === "dist") return Math.max(0, Math.min(1, v / 2000));
+    return Math.max(0, Math.min(1, (6 - v) / 5));
+  }
+  function calcularIndice() {
+    datos.manzanas.features.forEach(function (f) {
+      var suma = 0, peso = 0;
+      COMPONENTES.forEach(function (c) {
+        var w = estado.pesos[c.id] || 0, v = normal(c, f.properties[c.campo]);
+        if (!w || v == null) return;
+        suma += w * v; peso += w;
+      });
+      f.properties.necesidad = peso ? Math.round(suma / peso * 1000) / 10 : null;
+    });
+  }
+  var recalculo;
+  function recalcularIndice() {
+    clearTimeout(recalculo);
+    recalculo = setTimeout(function () {
+      calcularIndice();
+      if (mapa && mapa.getSource("manzanas")) mapa.getSource("manzanas").setData(datos.manzanas);
+      if (estado.seleccion) mapa.setFeatureState({ source: "manzanas", id: estado.seleccion.cod_dane }, { sel: true });
+      calcularCortes();
+      pintarRankingNecesidad();
+      guardarVistaURL();
+    }, 200);
+  }
+  function rankingNecesidad() {
+    var porComuna = {}, alta = 0, personasAlta = 0;
+    datos.manzanas.features.forEach(function (f) {
+      var p = f.properties, n = p.necesidad;
+      if (n == null) return;
+      var k = p.comuna_id || "sin";
+      porComuna[k] = porComuna[k] || { suma: 0, personas: 0, alta: 0 };
+      porComuna[k].suma += n * (p.personas || 0); porComuna[k].personas += p.personas || 0;
+      if (n >= 60) { alta++; personasAlta += p.personas || 0; porComuna[k].alta += p.personas || 0; }
+    });
+    var comunas = Object.keys(porComuna).filter(function (k) { return k !== "sin" && porComuna[k].personas; }).map(function (k) {
+      return { id: k, nombre: nombreComuna(k), indice: porComuna[k].suma / porComuna[k].personas, alta: porComuna[k].alta };
+    }).sort(function (a, b) { return b.indice - a.indice; });
+    var manzanas = datos.manzanas.features.filter(function (f) { return f.properties.necesidad != null && f.properties.personas >= 20; })
+      .sort(function (a, b) { return b.properties.necesidad - a.properties.necesidad; }).slice(0, 8);
+    return { comunas: comunas, manzanas: manzanas, alta: alta, personasAlta: personasAlta };
+  }
+  function pintarNecesidad() {
+    mostrarPestana("territorio");
+    estado.comunaVista = null;
+    var v = $("#vista-territorio"); v.innerHTML = "";
+    var sliders = COMPONENTES.map(function (c) {
+      var valor = el("span", { class: "mono", texto: String(estado.pesos[c.id]) });
+      var rango = el("input", { type: "range", min: "0", max: "5", step: "1", value: String(estado.pesos[c.id]), "aria-label": "Peso de " + c.nombre });
+      rango.addEventListener("input", function () {
+        estado.pesos[c.id] = Number(rango.value); valor.textContent = rango.value;
+        document.querySelectorAll("[data-preset]").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+        recalcularIndice();
+      });
+      return el("label", { class: "peso" }, [el("span", { class: "peso-nombre", texto: c.nombre }), rango, valor]);
+    });
+    var presets = el("div", { class: "herramientas" }, Object.keys(PRESETS).map(function (k) {
+      var activo = Object.keys(PRESETS[k]).every(function (c) { return PRESETS[k][c] === estado.pesos[c]; });
+      return el("button", { class: "chip", type: "button", "data-preset": k, "aria-pressed": activo ? "true" : "false", texto: k, onclick: function () {
+        estado.pesos = Object.assign({}, PRESETS[k]); pintarNecesidad(); recalcularIndice();
+      } });
+    }));
+    v.appendChild(el("div", { class: "aparecer" }, [
+      el("button", { class: "chip", type: "button", "aria-pressed": "false", texto: "← Ciudad", onclick: function () { pintarCiudad(); } }),
+      el("div", { class: "rotulo", texto: "Priorización de inversión", style: "margin-top:12px;color:#FFB900" }),
+      el("h3", { texto: "Índice de necesidad" }),
+      el("div", { class: "subtitulo", texto: "Ajuste cuánto pesa cada carencia; el mapa y el ranking se actualizan al instante." }),
+      presets,
+      el("div", { class: "pesos" }, sliders),
+      el("div", { id: "ranking-necesidad" }),
+      herramientas([["CSV de manzanas priorizadas", descargarNecesidad], ["Ficha PDF", function () { imprimirFicha("Índice de necesidad · Montería"); }], ["Compartir", compartir]]),
+      aviso("Índice relativo para comparar zonas de la cabecera, no una medida oficial de pobreza. Usa el Censo 2018 y distancias en línea recta; las distancias cuentan completas desde 2 km.")
+    ]));
+    pintarRankingNecesidad();
+  }
+  function pintarRankingNecesidad() {
+    var cont = $("#ranking-necesidad");
+    if (!cont) return;
+    var r = rankingNecesidad(), maxC = r.comunas.length ? r.comunas[0].indice : 1;
+    cont.innerHTML = "";
+    cont.appendChild(el("div", { class: "cifras" }, [
+      cifra("Manzanas prioridad alta (≥60)", num(r.alta)), cifra("Personas en ellas", num(r.personasAlta)),
+      cifra("Promedio ciudad", num(cuantil(datos.manzanas.features.map(function (f) { return f.properties.necesidad; }).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; }), 0.5), 0))
+    ]));
+    cont.appendChild(el("h4", { class: "rotulo", texto: "Comunas por índice (ponderado por población)" }));
+    r.comunas.forEach(function (c) {
+      var rel = el("div", { class: "relleno" });
+      rel.style.width = Math.max(4, c.indice / maxC * 100) + "%";
+      rel.style.background = c.indice >= 50 ? COLORES.rosa : c.indice >= 30 ? COLORES.ambar : COLORES.cian;
+      cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () { pintarComuna(c.id); } }, [
+        el("div", { class: "cab-fila" }, [el("span", { class: "titulo", texto: c.nombre }), el("span", { class: "mono", texto: num(c.indice, 1) })]),
+        el("div", { class: "pista", style: "margin-top:6px" }, [rel]),
+        el("div", { class: "meta", texto: num(c.alta) + " personas en manzanas de prioridad alta" })
+      ]));
+    });
+    cont.appendChild(el("h4", { class: "rotulo", texto: "Manzanas con mayor necesidad" }));
+    r.manzanas.forEach(function (f, i) {
+      var p = f.properties;
+      cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () {
+        var a = f.geometry.coordinates[0], x = 0, y = 0; a.forEach(function (q) { x += q[0]; y += q[1]; });
+        mapa.flyTo({ center: [x / a.length, y / a.length], zoom: 15.5, pitch: estado.tres_d ? 60 : 0, duration: 1400 });
+        seleccionarManzana(p);
+      } }, [
+        el("div", { class: "cab-fila" }, [el("span", { class: "titulo", texto: (i + 1) + ". Cerca de " + (p.barrio || "s. d.") }), el("span", { class: "mono", style: "color:#FF5C8A", texto: num(p.necesidad, 1) })]),
+        el("div", { class: "meta", texto: nombreComuna(p.comuna_id) + " · " + num(p.personas) + " personas · DANE " + p.cod_dane })
+      ]));
+    });
+  }
+  function descargarNecesidad() {
+    var filas = datos.manzanas.features.map(function (f) { return f.properties; }).filter(function (p) { return p.necesidad != null; })
+      .sort(function (a, b) { return b.necesidad - a.necesidad; });
+    var pesos = COMPONENTES.map(function (c) { return c.id + "=" + estado.pesos[c.id]; }).join(" ");
+    descargarCSV("monteria_indice_necesidad.csv", [
+      ["cod_dane", function (p) { return p.cod_dane; }], ["comuna", function (p) { return nombreComuna(p.comuna_id); }],
+      ["barrio_referencia_osm", function (p) { return p.barrio; }], ["personas", function (p) { return p.personas; }],
+      ["indice_necesidad", function (p) { return p.necesidad; }]
+    ].concat(COMPONENTES.map(function (c) { return [c.campo, function (p) { return p[c.campo]; }]; }))
+      .concat([["pesos", function () { return pesos; }]]), filas);
   }
 
   // ---------- Simulador: ¿cuántas personas ganan acceso con un nuevo equipamiento? ----------
@@ -1206,6 +1367,8 @@
       pestana: function (nombre) { mostrarPestana(nombre); },
       anioSecop: function (anio) { asegurarSecop().then(function () { fijarAnio(anio); }); },
       fuentes: function () { $("#fuentes").hidden = false; },
+      necesidad: function () { estado.lente = "necesidad"; aplicarLente(); limpiarSimulacion(); return rankingNecesidad(); },
+      abrirNecesidad: function () { pintarNecesidad(); mostrarPestana("asistente"); },
       inicio: function () { $("#vista-inicial").click(); mostrarPestana("asistente"); },
       vista: function () {
         return { lente: lenteActual().titulo, comuna: comunaSel, zoom: Math.round(mapa.getZoom() * 10) / 10,
@@ -1220,6 +1383,7 @@
     cargar("data/obras.geojson"), cargar("data/resumen.json")
   ]).then(function (r) {
     datos = { contexto: r[0], manzanas: r[1], equipamientos: r[2], obras: r[3], resumen: r[4] };
+    calcularIndice();
     calcularCortes();
     pintarKpis(); pintarLentes(); enlazarControles(); pintarFuentes();
     pintarCiudad(); pintarObras(); enlazarTiempo(); construirIndice(); enlazarBuscador();

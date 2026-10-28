@@ -22,6 +22,7 @@
     institucional: ["institucional", "alcaldia"], transporte: ["transporte", "terminal"]
   };
   var SUGERENCIAS = [
+    "¿Dónde priorizar la inversión?",
     "¿Qué comuna tiene más viviendas sin alcantarillado?",
     "Resumen de la comuna 5",
     "¿Cuántos equipamientos de salud hay en la comuna 3?",
@@ -169,6 +170,16 @@
 
     if (tiene(q, ["rio", "sinu", "humedal", "cienaga", "ambient", "ecosistema", "verde", "bosque", "caño", "cano"])) {
       return { texto: "Activé el lente **Ambiente**: aplana las manzanas y resalta el río Sinú, los cuerpos de agua, los humedales y las coberturas verdes.\n\nEsas coberturas vienen de OpenStreetMap y **no son los límites oficiales** de la estructura ecológica del POT. Haz clic sobre una cobertura para ver su nombre.", fuente: "OpenStreetMap", accion: function () { G.fijarLente(null); } };
+    }
+    if (tiene(q, ["prioridad", "priorizar", "necesidad", "invertir", "inversion", "focalizar", "vulnerab"])) {
+      var r = G.necesidad();
+      return {
+        texto: "Activé el **índice de necesidad** con los pesos actuales (servicios, distancia a equipamientos y estrato). Comunas con mayor índice, ponderado por población:\n" +
+          r.comunas.slice(0, 3).map(function (c, i) { return (i + 1) + ". " + c.nombre + ": " + n(c.indice, 1) + " puntos (" + n(c.alta) + " personas en manzanas de prioridad alta)"; }).join("\n") +
+          "\n\nEn total hay **" + n(r.alta) + " manzanas de prioridad alta** con " + n(r.personasAlta) + " personas. En la pestaña Territorio puede ajustar los pesos y descargar el ranking.",
+        fuente: "Censo DANE 2018 · OpenStreetMap · índice relativo, no oficial",
+        accion: function () { G.abrirNecesidad(); }
+      };
     }
     if (tiene(q, ["secop", "contrat", "licitacion"])) return secop(q);
     if (tiene(q, ["obra", "pdm", "plan de desarrollo", "instagram", "alcaldia comunic"])) return obras(q);

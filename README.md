@@ -13,6 +13,7 @@ Geovisor urbano de Montería con la identidad de ColombIA · CIIAC (Centro Insti
 - **Buscador** (`Ctrl K`) de barrios, comunas, equipamientos y obras.
 - **Organización tipo Google Maps**: categorías de equipamientos para filtrar, selector Mapa/Satélite, escala, ubicación propia y lente **Ambiente** con río, humedales y coberturas verdes.
 - **Herramientas de trabajo**: ficha PDF de ciudad o comuna (imprimir → guardar como PDF), descarga CSV de comunas, equipamientos y proyectos SECOP, y enlace que conserva la vista exacta para compartir.
+- **Índice de necesidad** (lente «Prioridad»): combina carencias de servicios, distancia a salud, educación y seguridad y estrato, con pesos ajustables y perfiles predefinidos; ranking de comunas ponderado por población, manzanas con mayor necesidad y descarga CSV. Es un índice relativo, no una medida oficial.
 - **Simulador de inversión**: estima cuántas personas ganarían acceso a salud, educación o seguridad con un nuevo equipamiento en el punto elegido, y sugiere los tres mejores sitios.
 - **Tutorial** de primera visita (botón `?` para repetirlo).
 - **Asistente**: chat que responde con los datos del visor y lleva el mapa al lugar consultado. Con el servicio de `worker/` configurado en `config.js`, responde además con IA (Claude).
