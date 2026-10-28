@@ -124,7 +124,7 @@ def main():
         "barrios": barrios,
     })
     escribir("manzanas.geojson", manzanas)
-    escribir("equipamientos.geojson", aligerar(datos["equipamientos"], ["nombre", "categoria", "tipo", "comuna_id"]))
+    escribir("equipamientos.geojson", aligerar(datos["equipamientos"], ["nombre", "categoria", "tipo", "comuna_id", "osm_id", "osm_tipo"]))
 
     obras = aligerar(datos["obras_instagram"])
     for f in obras["features"]:

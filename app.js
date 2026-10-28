@@ -191,7 +191,7 @@
     mapa.setFilter("equipamientos", estado.categoria ? ["==", ["get", "categoria"], estado.categoria] : null);
     mapa.setPaintProperty("equipamientos", "circle-radius", estado.categoria
       ? ["interpolate", ["linear"], ["zoom"], 11, 4, 16, 9] : ["interpolate", ["linear"], ["zoom"], 12, 2.5, 16, 6]);
-    if (estado.categoria) mapa.setLayerZoomRange("equipamientos", 0, 24); else mapa.setLayerZoomRange("equipamientos", 11.5, 24);
+    if (estado.categoria) mapa.setLayerZoomRange("equipamientos", 0, 24); else mapa.setLayerZoomRange("equipamientos", 13, 24);
     document.querySelectorAll("[data-categoria]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.categoria === estado.categoria ? "true" : "false"); });
   }
   function capasBase() {
@@ -288,7 +288,7 @@
         "fill-extrusion-color-transition": { duration: 700 }, "fill-extrusion-height-transition": { duration: 900 }
       }
     });
-    mapa.addLayer({ id: "equipamientos", type: "circle", source: "equipamientos", minzoom: 11.5, paint: {
+    mapa.addLayer({ id: "equipamientos", type: "circle", source: "equipamientos", minzoom: 13, paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.5, 16, 6],
       "circle-color": ["match", ["get", "categoria"]].concat(Object.keys(COLOR_CATEGORIA).reduce(function (a, k) { return a.concat([k, COLOR_CATEGORIA[k]]); }, []), ["#93A6C4"]),
       "circle-stroke-color": "#000B22", "circle-stroke-width": 1, "circle-opacity": 0.9
@@ -319,8 +319,8 @@
     });
     mapa.on("click", "obras", function (e) { mostrarObra(e.features[0]); });
     mapa.on("click", "equipamientos", function (e) {
-      var p = e.features[0].properties;
-      popup(e.features[0].geometry.coordinates, "<b>" + escapar(p.nombre || "Sin nombre") + "</b><br><span style='color:#93A6C4'>" + escapar(CATEGORIAS[p.categoria] || p.categoria) + " · OSM</span>");
+      if (estado.simulando) return;
+      popup(e.features[0].geometry.coordinates, fichaEquipamiento(e.features[0]));
     });
 
     montarBase("perimetro-brillo");
@@ -409,7 +409,7 @@
       } else if (f.layer.id === "obras") {
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>Obra comunicada · clic para ver</span>";
       } else if (f.layer.id === "equipamientos") {
-        html = "<b>" + escapar(f.properties.nombre || "Sin nombre") + "</b><span>" + escapar(CATEGORIAS[f.properties.categoria] || "") + "</span>";
+        html = "<b>" + escapar(nombreEquipamiento(f.properties)) + "</b><span>" + escapar(CATEGORIAS[f.properties.categoria] || "") + (f.properties.nombre ? "" : " · falta el nombre en OSM") + "</span>";
       } else {
         var eco = ECO[f.layer.id.replace("eco-", "")];
         html = "<b>" + escapar(f.properties.name || eco.nombre) + "</b><span>" + escapar(eco.nombre) + " · OSM</span>";
@@ -443,6 +443,11 @@
     document.querySelectorAll("[data-categoria]").forEach(function (b) { b.addEventListener("click", function () { fijarCategoria(b.dataset.categoria); }); });
     $("#abrir-simulador").addEventListener("click", abrirSimulador);
     $("#compartir").addEventListener("click", compartir);
+    $("#vista-limpia").addEventListener("click", function () { alternarLimpio(); });
+    $("#salir-limpio").addEventListener("click", function () { alternarLimpio(false); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && document.body.classList.contains("limpio")) alternarLimpio(false);
+    });
     $("#vista-inicial").addEventListener("click", function () {
       detenerOrbita();
       mapa.fitBounds(estado.limites, { padding: paddingMapa(), pitch: estado.tres_d ? 55 : 0, bearing: estado.tres_d ? -18 : 0, duration: 1600 });
@@ -932,6 +937,39 @@
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); abrirBuscador(); }
       else if (e.key === "Escape") { cerrarBuscador(); $("#fuentes").hidden = true; }
     });
+  }
+
+  // ---------- Equipamientos sin nombre ----------
+  var TIPOS_EQUIPAMIENTO = {
+    park: "Parque", pitch: "Cancha", playground: "Parque infantil", sports_centre: "Centro deportivo", school: "Institución educativa",
+    clinic: "Centro de salud", hospital: "Hospital", police: "Estación de policía", fire_station: "Estación de bomberos",
+    supermarket: "Supermercado", marketplace: "Plaza de mercado", community_centre: "Centro comunitario"
+  };
+  function nombreEquipamiento(p) {
+    if (p.nombre) return p.nombre;
+    return (TIPOS_EQUIPAMIENTO[p.tipo] || CATEGORIAS[p.categoria] || "Equipamiento") + " sin nombre";
+  }
+  // Los enlaces solo abren servicios externos: el visor no copia datos de Google Maps
+  // (sus términos lo prohíben) y los nombres se corrigen en OSM con conocimiento local.
+  function fichaEquipamiento(f) {
+    var p = f.properties, c = f.geometry.coordinates;
+    var html = "<b>" + escapar(nombreEquipamiento(p)) + "</b><br><span style='color:#93A6C4'>" + escapar(CATEGORIAS[p.categoria] || p.categoria) + " · OpenStreetMap</span>";
+    var osm = p.osm_id ? "https://www.openstreetmap.org/" + escapar(p.osm_tipo || "node") + "/" + escapar(p.osm_id) : null;
+    html += "<div class='enlaces-popup'>";
+    if (!p.nombre) html += "<p class='falta'>Este lugar no tiene nombre en OpenStreetMap. Si lo conoce, puede agregarlo con su conocimiento local.</p>";
+    if (osm) html += "<a href='" + osm + "' target='_blank' rel='noopener noreferrer'>" + (p.nombre ? "Ver o corregir en OSM" : "Agregar nombre en OSM") + "</a>";
+    html += "<a href='https://www.google.com/maps/search/?api=1&query=" + c[1] + "," + c[0] + "' target='_blank' rel='noopener noreferrer'>Abrir en Google Maps</a>";
+    html += "</div>";
+    return html;
+  }
+
+  // ---------- Vista limpia: solo el mapa ----------
+  function alternarLimpio(activar) {
+    var on = activar == null ? !document.body.classList.contains("limpio") : activar;
+    document.body.classList.toggle("limpio", on);
+    $("#vista-limpia").setAttribute("aria-pressed", on ? "true" : "false");
+    if (popupActivo) popupActivo.remove();
+    setTimeout(function () { mapa.resize(); }, 320);
   }
 
   // ---------- Herramientas de trabajo: compartir, exportar, imprimir ----------
