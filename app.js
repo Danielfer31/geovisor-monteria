@@ -300,7 +300,9 @@
       if (hover !== null) mapa.setFeatureState({ source: "manzanas", id: hover }, { hover: false });
       hover = null; mapa.getCanvas().style.cursor = "";
     });
+    mapa.on("click", function (e) { if (clicSimulador(e)) e.preventDefault(); });
     mapa.on("click", "manzanas", function (e) {
+      if (estado.simulando) return;
       if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos"] }).length) return;
       seleccionarManzana(e.features[0].properties);
     });
@@ -320,6 +322,9 @@
     animarObras();
     animarRio();
     iniciarAsistente();
+    leerVistaURL();
+    mapa.on("moveend", guardarVistaURL);
+    iniciarTutorial();
     $("#carga").classList.add("listo");
   }
 
@@ -419,6 +424,7 @@
     });
 
     mapa.on("click", function (e) {
+      if (estado.simulando) return;
       if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "manzanas"] }).length) return;
       var f = mapa.queryRenderedFeatures(e.point, { layers: CAPAS_ECO })[0];
       if (!f) return;
@@ -428,6 +434,8 @@
 
     document.querySelectorAll("[data-base]").forEach(function (b) { b.addEventListener("click", function () { fijarBase(b.dataset.base); }); });
     document.querySelectorAll("[data-categoria]").forEach(function (b) { b.addEventListener("click", function () { fijarCategoria(b.dataset.categoria); }); });
+    $("#abrir-simulador").addEventListener("click", abrirSimulador);
+    $("#compartir").addEventListener("click", compartir);
     $("#vista-inicial").addEventListener("click", function () {
       detenerOrbita();
       mapa.fitBounds(estado.limites, { padding: paddingMapa(), pitch: estado.tres_d ? 55 : 0, bearing: estado.tres_d ? -18 : 0, duration: 1600 });
@@ -585,6 +593,7 @@
 
   function pintarCiudad() {
     limpiarSeleccion();
+    estado.comunaVista = null;
     if (mapa && mapa.getSource("comunas")) marcarComuna(null);
     var m = datos.resumen.resumen.municipio, v = $("#vista-territorio");
     v.innerHTML = "";
@@ -592,6 +601,11 @@
       el("div", { class: "rotulo", texto: "Cabecera municipal" }),
       el("h3", { texto: "Montería" }),
       el("div", { class: "subtitulo", texto: "Córdoba · " + num(m.manzanas) + " manzanas · 9 comunas OSM" }),
+      herramientas([
+        ["Simular equipamiento", abrirSimulador, true],
+        ["Ficha PDF", function () { imprimirFicha("Montería · cabecera municipal"); }],
+        ["CSV comunas", descargarComunas]
+      ]),
       el("div", { class: "cifras" }, [cifra("Personas", num(m.personas)), cifra("Hogares", num(m.hogares)), cifra("Viviendas", num(m.viviendas))]),
       el("h4", { class: "rotulo", texto: "Cobertura de servicios" }),
       el("div", { class: "anillos" }, [
@@ -622,6 +636,7 @@
   function pintarComuna(id) {
     limpiarSeleccion();
     marcarComuna(id);
+    estado.comunaVista = id;
     var c = datos.resumen.resumen.comunas.filter(function (x) { return x.comuna_id === id; })[0];
     var f = datos.contexto.comunas.features.filter(function (x) { return x.properties.comuna_id === id; })[0];
     if (f) {
@@ -637,6 +652,11 @@
       el("div", { class: "rotulo", texto: "Comuna · OpenStreetMap", style: "margin-top:12px" }),
       el("h3", { texto: c.nombre }),
       el("div", { class: "subtitulo", texto: num(c.manzanas) + " manzanas" }),
+      herramientas([
+        ["Ficha PDF", function () { imprimirFicha(c.nombre + " · Montería"); }],
+        ["CSV equipamientos", function () { descargarEquipamientos(c); }],
+        ["Compartir", compartir]
+      ]),
       el("div", { class: "cifras" }, [cifra("Personas", num(c.personas)), cifra("Hogares", num(c.hogares)), cifra("Viviendas", num(c.viviendas))]),
       el("h4", { class: "rotulo", texto: "Cobertura de servicios" }),
       el("div", { class: "anillos" }, [
@@ -809,6 +829,7 @@
       el("span", { texto: "Página " + (pag + 1) + " de " + paginas }),
       el("button", { class: "chip", type: "button", "aria-pressed": "false", texto: "Siguiente →", onclick: function () { if (estado.secopPagina < paginas - 1) { estado.secopPagina++; pintarSecop(); } } })
     ]));
+    cont.appendChild(herramientas([["Descargar CSV (" + num(total) + ")", function () { descargarSecop(lista); }]]));
     cont.appendChild(aviso("Clasificación automática pendiente de revisión humana. SECOP no trae ubicación verificada, por eso estos proyectos aún no se dibujan en el mapa."));
     v.appendChild(cont);
   }
@@ -900,6 +921,270 @@
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); abrirBuscador(); }
       else if (e.key === "Escape") { cerrarBuscador(); $("#fuentes").hidden = true; }
     });
+  }
+
+  // ---------- Herramientas de trabajo: compartir, exportar, imprimir ----------
+  function herramientas(acciones) {
+    return el("div", { class: "herramientas" }, acciones.map(function (a) {
+      return el("button", { class: "chip" + (a[2] ? " chip-destacado" : ""), type: "button", "aria-pressed": "false", texto: a[0], onclick: a[1] });
+    }));
+  }
+  function aviso_breve(texto) {
+    var t = $("#toast");
+    t.textContent = texto; t.hidden = false;
+    clearTimeout(estado.toast);
+    estado.toast = setTimeout(function () { t.hidden = true; }, 2600);
+  }
+
+  // La vista (lente, comuna, cámara, mapa base) viaja en la dirección para compartirla tal cual
+  function guardarVistaURL() {
+    if (!mapa) return;
+    var c = mapa.getCenter();
+    var partes = ["lente=" + estado.lente, "c=" + c.lng.toFixed(5) + "," + c.lat.toFixed(5), "z=" + mapa.getZoom().toFixed(2),
+      "p=" + Math.round(mapa.getPitch()), "b=" + Math.round(mapa.getBearing())];
+    if (estado.comunaVista) partes.push("comuna=" + estado.comunaVista);
+    if (estado.base === "satelite") partes.push("base=satelite");
+    try { history.replaceState(null, "", "#" + partes.join("&")); } catch (e) { /* vista sin historial */ }
+  }
+  function leerVistaURL() {
+    var h = {};
+    location.hash.replace(/^#/, "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) h[p[0]] = decodeURIComponent(p[1] || ""); });
+    if (h.lente && LENTES.some(function (l) { return l.id === h.lente; })) { estado.lente = h.lente; aplicarLente(); }
+    if (h.base === "satelite") fijarBase("satelite");
+    if (h.comuna) { pintarComuna(h.comuna); return; }
+    if (h.c && h.z) {
+      var c = h.c.split(",").map(Number);
+      if (c.length === 2 && !isNaN(c[0]) && !isNaN(c[1])) mapa.jumpTo({ center: c, zoom: Number(h.z), pitch: Number(h.p) || 0, bearing: Number(h.b) || 0 });
+    }
+  }
+  function compartir() {
+    guardarVistaURL();
+    var url = location.href;
+    if (navigator.share && window.matchMedia("(max-width: 760px)").matches) {
+      navigator.share({ title: document.title, url: url }).catch(function () {});
+      return;
+    }
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () {
+      aviso_breve("Enlace copiado: abre el mapa en esta misma vista");
+    }).catch(function () { window.prompt("Copie este enlace:", url); });
+  }
+
+  function descargarCSV(nombre, columnas, filas) {
+    var celda = function (v) { v = v == null ? "" : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var texto = "﻿" + [columnas.map(function (c) { return celda(c[0]); }).join(",")]
+      .concat(filas.map(function (f) { return columnas.map(function (c) { return celda(c[1](f)); }).join(","); })).join("\n");
+    var a = el("a", { href: URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" })), download: nombre });
+    document.body.appendChild(a); a.click(); a.remove();
+    aviso_breve("Descargado " + nombre);
+  }
+  var CORTE = function () { return datos.resumen.secop.corte || ""; };
+  function descargarComunas() {
+    descargarCSV("monteria_comunas_" + CORTE() + ".csv", [
+      ["comuna_id", function (c) { return c.comuna_id; }], ["nombre", function (c) { return c.nombre; }],
+      ["manzanas", function (c) { return c.manzanas; }], ["personas", function (c) { return c.personas; }],
+      ["hogares", function (c) { return c.hogares; }], ["viviendas", function (c) { return c.viviendas; }],
+      ["pct_sin_acueducto", function (c) { return c.pct_sin_acueducto; }], ["pct_sin_alcantarillado", function (c) { return c.pct_sin_alcantarillado; }],
+      ["pct_sin_recoleccion", function (c) { return c.pct_sin_recoleccion; }], ["pct_sin_internet", function (c) { return c.pct_sin_internet; }],
+      ["pct_personas_lejos_salud", function (c) { return c.pct_personas_lejos_salud; }], ["pct_personas_lejos_educacion", function (c) { return c.pct_personas_lejos_educacion; }],
+      ["pct_personas_lejos_seguridad", function (c) { return c.pct_personas_lejos_seguridad; }],
+      ["fuente", function () { return "Censo DANE 2018; comunas OpenStreetMap (no oficiales)"; }]
+    ], datos.resumen.resumen.comunas);
+  }
+  function descargarEquipamientos(c) {
+    var fs = datos.equipamientos.features.filter(function (f) { return f.properties.comuna_id === c.comuna_id; });
+    descargarCSV("monteria_equipamientos_comuna_" + c.comuna_id + ".csv", [
+      ["nombre", function (f) { return f.properties.nombre; }], ["categoria", function (f) { return CATEGORIAS[f.properties.categoria] || f.properties.categoria; }],
+      ["tipo", function (f) { return f.properties.tipo; }], ["longitud", function (f) { return f.geometry.coordinates[0]; }],
+      ["latitud", function (f) { return f.geometry.coordinates[1]; }], ["fuente", function () { return "OpenStreetMap"; }]
+    ], fs);
+  }
+  function descargarSecop(lista) {
+    descargarCSV("monteria_secop_proyectos" + (estado.secopAnio ? "_" + estado.secopAnio : "") + ".csv", [
+      ["titulo", function (p) { return p.t; }], ["sector", function (p) { return SECTORES[p.s] || p.s; }], ["intervencion", function (p) { return p.i; }],
+      ["valor_cop", function (p) { return p.v; }], ["fecha_firma", function (p) { return p.f; }], ["entidad", function (p) { return p.e; }],
+      ["contratos", function (p) { return p.n; }], ["url_secop", function (p) { return p.u; }],
+      ["nota", function () { return "Clasificación automática pendiente de revisión humana"; }]
+    ], lista);
+  }
+
+  // Ficha imprimible: foto del mapa + contenido del panel, con estilo claro para PDF
+  function fotoMapa() {
+    return new Promise(function (ok) {
+      mapa.once("render", function () {
+        try { ok(mapa.getCanvas().toDataURL("image/png")); } catch (e) { ok(null); }
+      });
+      mapa.triggerRepaint();
+    });
+  }
+  function imprimirFicha(titulo) {
+    fotoMapa().then(function (img) {
+      var r = $("#reporte");
+      var cuerpo = $("#vista-territorio").cloneNode(true);
+      cuerpo.removeAttribute("id");
+      cuerpo.querySelectorAll("button.chip, .herramientas").forEach(function (b) { b.remove(); });
+      r.innerHTML = "";
+      r.appendChild(el("header", { class: "rep-cab" }, [
+        el("img", { src: "assets/colombia_simbolo_azul.png", alt: "" }),
+        el("div", {}, [el("strong", { texto: "Geovisor Montería · CIIAC" }), el("span", { texto: titulo })]),
+        el("span", { class: "rep-fecha", texto: "Generado " + new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" }) })
+      ]));
+      if (img) r.appendChild(el("img", { class: "rep-mapa", src: img, alt: "Mapa de " + titulo }));
+      r.appendChild(el("p", { class: "rep-lente", texto: "Lente del mapa: " + lenteActual().titulo + " · " + lenteActual().nota }));
+      r.appendChild(cuerpo);
+      r.appendChild(el("footer", { class: "rep-pie", texto: "Fuentes: Censo DANE 2018 por manzana; comunas, barrios y equipamientos de OpenStreetMap (no son límites ni registros oficiales); distancias en línea recta. Consulte la vista en línea: " + location.href }));
+      setTimeout(function () { window.print(); }, 150);
+    });
+  }
+
+  // ---------- Simulador: ¿cuántas personas ganan acceso con un nuevo equipamiento? ----------
+  var SIM_TIPOS = { salud: { campo: "dist_salud_m", nombre: "salud" }, educacion: { campo: "dist_educacion_m", nombre: "educación" }, seguridad: { campo: "dist_seguridad_m", nombre: "seguridad" } };
+  var centroides = null;
+  function prepararCentroides() {
+    if (centroides) return centroides;
+    centroides = datos.manzanas.features.map(function (f) {
+      var a = f.geometry.coordinates[0], x = 0, y = 0;
+      a.forEach(function (q) { x += q[0]; y += q[1]; });
+      return { lng: x / a.length, lat: y / a.length, p: f.properties };
+    });
+    return centroides;
+  }
+  function metros(a, b) {
+    var R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function evaluarSitio(punto, tipo) {
+    var campo = SIM_TIPOS[tipo].campo, umbral = datos.resumen.resumen.umbral_distancia_m, ganan = 0, manzanas = 0, cerca = 0;
+    prepararCentroides().forEach(function (c) {
+      var d = metros(punto, c);
+      if (d > umbral) return;
+      cerca += c.p.personas || 0;
+      if ((c.p[campo] == null || c.p[campo] > umbral)) { ganan += c.p.personas || 0; manzanas++; }
+    });
+    return { ganan: ganan, manzanas: manzanas, cerca: cerca };
+  }
+  function sugerirSitios(tipo) {
+    var campo = SIM_TIPOS[tipo].campo, umbral = datos.resumen.resumen.umbral_distancia_m;
+    var candidatos = prepararCentroides().filter(function (c) { return c.p[campo] > umbral && c.p.personas > 0; });
+    var paso = Math.max(1, Math.floor(candidatos.length / 350));
+    var mejores = [];
+    for (var i = 0; i < candidatos.length; i += paso) {
+      var r = evaluarSitio(candidatos[i], tipo);
+      mejores.push({ lng: candidatos[i].lng, lat: candidatos[i].lat, ganan: r.ganan, manzanas: r.manzanas, p: candidatos[i].p });
+    }
+    mejores.sort(function (a, b) { return b.ganan - a.ganan; });
+    var elegidos = [];
+    mejores.forEach(function (m) {
+      if (elegidos.length < 3 && elegidos.every(function (e) { return metros(e, m) > 1500; })) elegidos.push(m);
+    });
+    return elegidos;
+  }
+  function circulo(centro, radio) {
+    var pts = [], dLat = radio / 111320, dLng = radio / (111320 * Math.cos(centro.lat * Math.PI / 180));
+    for (var i = 0; i <= 64; i++) { var a = i / 64 * 2 * Math.PI; pts.push([centro.lng + dLng * Math.cos(a), centro.lat + dLat * Math.sin(a)]); }
+    return { type: "Feature", geometry: { type: "Polygon", coordinates: [pts] }, properties: {} };
+  }
+  function dibujarSimulacion(sitios) {
+    var umbral = datos.resumen.resumen.umbral_distancia_m;
+    var fc = { type: "FeatureCollection", features: [] };
+    sitios.forEach(function (s, i) {
+      fc.features.push(circulo(s, umbral));
+      fc.features.push({ type: "Feature", geometry: { type: "Point", coordinates: [s.lng, s.lat] }, properties: { n: String(i + 1) } });
+    });
+    if (!mapa.getSource("simulacion")) {
+      mapa.addSource("simulacion", { type: "geojson", data: fc });
+      mapa.addLayer({ id: "sim-area", type: "fill", source: "simulacion", filter: ["==", ["geometry-type"], "Polygon"], paint: { "fill-color": COLORES.ambar, "fill-opacity": 0.12 } });
+      mapa.addLayer({ id: "sim-borde", type: "line", source: "simulacion", filter: ["==", ["geometry-type"], "Polygon"], paint: { "line-color": COLORES.ambar, "line-width": 2, "line-dasharray": [2, 1.5] } });
+      mapa.addLayer({ id: "sim-punto", type: "circle", source: "simulacion", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 9, "circle-color": COLORES.blanco, "circle-stroke-color": COLORES.ambar, "circle-stroke-width": 4 } });
+    } else mapa.getSource("simulacion").setData(fc);
+  }
+  function limpiarSimulacion() {
+    if (mapa.getSource("simulacion")) mapa.getSource("simulacion").setData({ type: "FeatureCollection", features: [] });
+    estado.simulando = null;
+    mapa.getCanvas().style.cursor = "";
+  }
+  function abrirSimulador() {
+    estado.simulando = estado.simulando || "salud";
+    mostrarPestana("territorio");
+    pintarSimulador(null);
+  }
+  function pintarSimulador(resultado) {
+    var tipo = estado.simulando, v = $("#vista-territorio"), umbral = datos.resumen.resumen.umbral_distancia_m;
+    v.innerHTML = "";
+    var selector = el("div", { class: "herramientas" }, Object.keys(SIM_TIPOS).map(function (k) {
+      return el("button", { class: "chip", type: "button", "aria-pressed": k === tipo ? "true" : "false", texto: "Nuevo de " + SIM_TIPOS[k].nombre,
+        onclick: function () { estado.simulando = k; limpiarSimulacion(); estado.simulando = k; pintarSimulador(null); } });
+    }));
+    var cuerpo = [
+      el("button", { class: "chip", type: "button", "aria-pressed": "false", texto: "← Salir del simulador", onclick: function () { limpiarSimulacion(); pintarCiudad(); } }),
+      el("div", { class: "rotulo", texto: "Simulador de inversión", style: "margin-top:12px;color:#FFB900" }),
+      el("h3", { texto: "¿Dónde construir?" }),
+      el("div", { class: "subtitulo", texto: "Haga clic en el mapa para ubicar un equipamiento y ver cuántas personas quedarían a menos de " + num(umbral) + " m." }),
+      selector,
+      el("button", { class: "tarjeta tarjeta-accion", type: "button", onclick: function () {
+        var s = sugerirSitios(tipo);
+        dibujarSimulacion(s);
+        if (s.length) {
+          var b = new maplibregl.LngLatBounds(); s.forEach(function (x) { b.extend([x.lng, x.lat]); });
+          mapa.fitBounds(b, { padding: paddingMapa(), maxZoom: 14, duration: 1400 });
+        }
+        pintarSimulador({ sugeridos: s });
+      } }, [el("div", { class: "titulo", texto: "✦ Sugerir los 3 mejores sitios" }), el("div", { class: "meta", texto: "Busca dónde un nuevo equipamiento de " + SIM_TIPOS[tipo].nombre + " beneficiaría a más personas que hoy están lejos." })])
+    ];
+    if (resultado && resultado.ganan != null) {
+      cuerpo.push(el("div", { class: "tarjeta resultado-sim" }, [
+        el("div", { class: "rotulo", texto: "Resultado del sitio elegido" }),
+        el("div", { class: "cifra-grande mono", texto: num(resultado.ganan) }),
+        el("div", { class: "meta", texto: "personas ganarían acceso a " + SIM_TIPOS[tipo].nombre + " a menos de " + num(umbral) + " m (" + num(resultado.manzanas) + " manzanas que hoy están lejos)." }),
+        el("div", { class: "meta", texto: "En total viven " + num(resultado.cerca) + " personas dentro del radio." })
+      ]));
+    }
+    if (resultado && resultado.sugeridos) {
+      if (!resultado.sugeridos.length) cuerpo.push(aviso("No hay manzanas lejos de " + SIM_TIPOS[tipo].nombre + " con población registrada."));
+      resultado.sugeridos.forEach(function (s, i) {
+        cuerpo.push(el("button", { class: "tarjeta", type: "button", onclick: function () { mapa.flyTo({ center: [s.lng, s.lat], zoom: 14.5, duration: 1200 }); } }, [
+          el("div", { class: "titulo", texto: "Sitio " + (i + 1) + " · cerca de " + (s.p.barrio || "sin barrio de referencia") }),
+          el("div", { class: "meta mono", texto: num(s.ganan) + " personas ganan acceso · " + num(s.manzanas) + " manzanas" })
+        ]));
+      });
+    }
+    cuerpo.push(aviso("Estimación con población del Censo 2018 y distancia en línea recta desde el centro de cada manzana. Sirve para comparar alternativas, no reemplaza el estudio de predios, normas del POT ni capacidad del servicio."));
+    v.appendChild(el("div", { class: "aparecer" }, cuerpo));
+  }
+  function clicSimulador(e) {
+    if (!estado.simulando) return false;
+    var p = { lng: e.lngLat.lng, lat: e.lngLat.lat };
+    var r = evaluarSitio(p, estado.simulando);
+    dibujarSimulacion([p]);
+    pintarSimulador(r);
+    return true;
+  }
+
+  // ---------- Tutorial de primera visita ----------
+  var PASOS = [
+    ["Bienvenido al Geovisor Montería", "Explore la ciudad manzana por manzana con datos del Censo DANE, OpenStreetMap, obras comunicadas y SECOP. Le mostramos lo esencial en cuatro pasos."],
+    ["Elija un lente", "La barra de la izquierda cambia lo que muestra el mapa: densidad, servicios, distancia a salud, educación o seguridad, y ambiente. La altura y el color de cada manzana siguen el valor."],
+    ["Haga clic para ver fichas", "Toque una manzana o una etiqueta de comuna (C1 a C9) para ver su ficha. Desde la ficha puede descargar un PDF o un CSV y compartir la vista exacta."],
+    ["Simule y pregunte", "Use «Simular equipamiento» para estimar a cuántas personas beneficia un nuevo puesto de salud, colegio o estación. Y pregunte al Asistente por cualquier dato del mapa."]
+  ];
+  function iniciarTutorial() {
+    $("#abrir-ayuda").addEventListener("click", function () { mostrarPaso(0); });
+    var visto = false;
+    try { visto = localStorage.getItem("geovisor-tutorial") === "1"; } catch (e) { visto = false; }
+    if (!visto && !location.hash) mostrarPaso(0);
+  }
+  function mostrarPaso(i) {
+    var t = $("#tutorial");
+    if (i >= PASOS.length) { t.hidden = true; try { localStorage.setItem("geovisor-tutorial", "1"); } catch (e) { /* sin almacenamiento */ } return; }
+    t.hidden = false;
+    t.querySelector(".tut-paso").textContent = "Paso " + (i + 1) + " de " + PASOS.length;
+    t.querySelector("h2").textContent = PASOS[i][0];
+    t.querySelector("p").textContent = PASOS[i][1];
+    var sig = t.querySelector("[data-siguiente]");
+    sig.textContent = i === PASOS.length - 1 ? "Empezar" : "Siguiente";
+    sig.onclick = function () { mostrarPaso(i + 1); };
+    t.querySelector("[data-omitir]").onclick = function () { mostrarPaso(PASOS.length); };
+    sig.focus();
   }
 
   // ---------- Asistente ----------
