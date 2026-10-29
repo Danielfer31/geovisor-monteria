@@ -162,7 +162,8 @@
   var CAPAS_VIAS = ["vias-concesion", "vias-tramos-casco", "vias-tramos", "vias-rutas", "vias-peajes", "vias-aeropuerto", "vias-aeropuerto-nombre"];
   // Zona rural: centros poblados del POT agrupados por corregimiento
   var CORR = { color: "#FDBA74", limite: "#FBFAF6" };
-  var CAPAS_CORR = ["corr-limite", "corr-centros", "corr-centros-borde", "corr-puntos", "corr-etiquetas"];
+  var CAPAS_CORR = ["corr-limite", "corr-centros", "corr-centros-borde", "corr-puntos", "corr-etiquetas", "corr-seleccion-brillo", "corr-seleccion-etiquetas"];
+  var NINGUNO = ["==", ["get", "capa"], "ninguna"];
   function corregimientos() { return datos.corregimientos.features.filter(function (f) { return f.properties.capa === "corregimiento"; }); }
   function limitesMunicipio() {
     var b = new maplibregl.LngLatBounds();
@@ -392,6 +393,14 @@
     mapa.addLayer({ id: "corr-etiquetas", type: "symbol", source: "corregimientos", filter: capa("corregimiento"), minzoom: 9.2, maxzoom: 13.5,
       layout: { "text-field": ["get", "nombre"], "text-font": ["Noto Sans Regular"], "text-size": 12, "text-anchor": "top", "text-offset": [0, 0.7] },
       paint: { "text-color": CORR.color, "text-halo-color": "#000B22", "text-halo-width": 1.5 } });
+    // Corregimiento seleccionado: brillo en sus centros poblados y sus nombres por encima de las demás etiquetas
+    mapa.addLayer({ id: "corr-seleccion-brillo", type: "line", source: "corregimientos", filter: NINGUNO, layout: { "line-join": "round" },
+      paint: { "line-color": CORR.color, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 6, 15, 14], "line-blur": 6, "line-opacity": 0.7 } }, "corr-centros-borde");
+    // Una etiqueta por centro poblado en su punto central (algunos son multipolígonos)
+    mapa.addSource("corr-seleccion", { type: "geojson", data: VACIA });
+    mapa.addLayer({ id: "corr-seleccion-etiquetas", type: "symbol", source: "corr-seleccion",
+      layout: { "text-field": ["get", "nombre"], "text-font": ["Noto Sans Regular"], "text-size": 13 },
+      paint: { "text-color": COLORES.blanco, "text-halo-color": "#000B22", "text-halo-width": 1.8 } });
     mapa.on("click", "obras", function (e) { mostrarObra(e.features[0]); });
     mapa.on("click", "corr-puntos", function (e) {
       if (estado.simulando) return;
@@ -802,6 +811,23 @@
     var lim = limitesMunicipio();
     if (lim) mapa.fitBounds(lim, { padding: paddingMapa(), pitch: 0, bearing: 0, duration: 1600 });
   }
+  // Destaca los centros poblados del corregimiento elegido y atenúa los demás; null vuelve al estilo normal
+  function resaltarCorregimiento(nombre) {
+    if (!mapa || !mapa.getLayer("corr-seleccion-etiquetas")) return;
+    var sel = ["==", ["get", "corregimiento"], nombre || ""];
+    mapa.setFilter("corr-seleccion-brillo", nombre ? ["all", ["==", ["get", "capa"], "centro"], sel] : NINGUNO);
+    var f = nombre && corregimientos().filter(function (x) { return x.properties.nombre === nombre; })[0];
+    mapa.getSource("corr-seleccion").setData(f ? { type: "FeatureCollection", features: centrosDe(f).map(function (c) {
+      return { type: "Feature", geometry: { type: "Point", coordinates: c.punto }, properties: { nombre: c.nombre } };
+    }) } : VACIA);
+    mapa.setPaintProperty("corr-centros", "fill-opacity", nombre ? ["case", sel, 0.65, 0.12] : 0.35);
+    mapa.setPaintProperty("corr-centros-borde", "line-color", nombre ? ["case", sel, COLORES.blanco, CORR.color] : CORR.color);
+    mapa.setPaintProperty("corr-centros-borde", "line-width", nombre
+      ? ["interpolate", ["linear"], ["zoom"], 10, ["case", sel, 2, 0.6], 15, ["case", sel, 3.5, 1.5]]
+      : ["interpolate", ["linear"], ["zoom"], 10, 0.8, 15, 2]);
+    mapa.setPaintProperty("corr-puntos", "circle-stroke-color", nombre ? ["case", ["==", ["get", "nombre"], nombre], COLORES.blanco, "#000B22"] : "#000B22");
+    mapa.setPaintProperty("corr-puntos", "circle-stroke-width", nombre ? ["case", ["==", ["get", "nombre"], nombre], 3, 1.5] : 1.5);
+  }
   var JERARQUIA = { Principal: "principal", Intermedio: "intermedia", Secundario: "secundaria" };
   function jerarquia(j) { return "jerarquía " + (JERARQUIA[j] || String(j).toLowerCase()); }
   function fichaCentroPoblado(p) {
@@ -816,6 +842,10 @@
     marcarComuna(null);
     var cs = centrosDe(f), b = new maplibregl.LngLatBounds();
     cs.forEach(function (c) { b.extend(c.punto); });
+    datos.corregimientos.features.forEach(function (x) {
+      if (x.properties.capa === "centro" && x.properties.corregimiento === nombre) b.extend(limitesDe([x]));
+    });
+    resaltarCorregimiento(nombre);
     mapa.fitBounds(b, { padding: paddingMapa(), maxZoom: 13.5, pitch: estado.tres_d ? 45 : 0, duration: 1600 });
     var v = $("#vista-territorio");
     v.innerHTML = "";
@@ -885,6 +915,7 @@
   }
 
   function limpiarSeleccion() {
+    resaltarCorregimiento(null);
     if (estado.seleccion && mapa) mapa.setFeatureState({ source: "manzanas", id: estado.seleccion.cod_dane }, { sel: false });
     estado.seleccion = null;
   }
@@ -1249,11 +1280,8 @@
   }
   function limitesDe(fs) {
     var b = new maplibregl.LngLatBounds();
-    fs.forEach(function (f) {
-      var g = f.geometry;
-      if (g.type === "Point") b.extend(g.coordinates);
-      else g.coordinates.forEach(function (l) { l.forEach(function (q) { b.extend(q); }); });
-    });
+    var recorrer = function (c) { if (typeof c[0] === "number") b.extend(c); else c.forEach(recorrer); };
+    fs.forEach(function (f) { recorrer(f.geometry.coordinates); });
     return b;
   }
   function verTramos(fs) {
