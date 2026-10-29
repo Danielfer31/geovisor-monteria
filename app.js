@@ -157,6 +157,9 @@
     area_protegida: { color: "#A3E635", nombre: "Área protegida RUNAP · CVS" },
     sedes: "#4FC3F7"
   };
+  // Red vial nacional (INVÍAS) con concesiones (ANI), peajes y el aeropuerto: línea continua y aro hueco como las demás capas oficiales
+  var VIAS = { linea: "#E879F9", concesion: "#FDE047", aeropuerto: "#FBFAF6" };
+  var CAPAS_VIAS = ["vias-concesion", "vias-tramos-casco", "vias-tramos", "vias-rutas", "vias-peajes", "vias-aeropuerto", "vias-aeropuerto-nombre"];
   // Zona rural: centros poblados del POT agrupados por corregimiento
   var CORR = { color: "#FDBA74", limite: "#FBFAF6" };
   var CAPAS_CORR = ["corr-limite", "corr-centros", "corr-centros-borde", "corr-puntos", "corr-etiquetas"];
@@ -291,6 +294,7 @@
     mapa.addSource("oficial-ambiente", { type: "geojson", data: datos.oficialAmbiente });
     mapa.addSource("oficial-sedes", { type: "geojson", data: datos.oficialSedes });
     mapa.addSource("corregimientos", { type: "geojson", data: datos.corregimientos });
+    mapa.addSource("vias", { type: "geojson", data: datos.vias });
 
     mapa.addLayer({ id: "perimetro-brillo", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 8, "line-blur": 8, "line-opacity": 0.35 } });
     mapa.addLayer({ id: "perimetro", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 1.2, "line-opacity": 0.8 } });
@@ -326,6 +330,28 @@
         "fill-extrusion-color-transition": { duration: 700 }, "fill-extrusion-height-transition": { duration: 900 }
       }
     });
+    mapa.addLayer({ id: "vias-concesion", type: "line", source: "vias", filter: capa("concesion"), layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": VIAS.concesion, "line-width": ["interpolate", ["linear"], ["zoom"], 8, 7, 14, 16], "line-opacity": 0.2, "line-blur": 2 } });
+    var anchoVia = function (base) {
+      return ["interpolate", ["linear"], ["zoom"], 8, ["*", base, ["match", ["get", "calzada"], "Doble", 1.6, 1]], 14, ["*", base * 2.6, ["match", ["get", "calzada"], "Doble", 1.6, 1]]];
+    };
+    mapa.addLayer({ id: "vias-tramos-casco", type: "line", source: "vias", filter: capa("tramo"), layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#000B22", "line-width": anchoVia(3.2), "line-opacity": 0.85 } });
+    mapa.addLayer({ id: "vias-tramos", type: "line", source: "vias", filter: capa("tramo"), layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": VIAS.linea, "line-width": anchoVia(1.6), "line-opacity": 0.95 } });
+    mapa.addLayer({ id: "vias-rutas", type: "symbol", source: "vias", minzoom: 9, filter: ["all", capa("tramo"), ["has", "ruta"]],
+      layout: { "text-field": ["concat", "Ruta ", ["get", "ruta"]], "text-font": ["Noto Sans Regular"], "text-size": 11,
+        "symbol-placement": "line", "symbol-spacing": 420, "text-letter-spacing": 0.04 },
+      paint: { "text-color": VIAS.linea, "text-halo-color": "#000B22", "text-halo-width": 1.8 } });
+    mapa.addLayer({ id: "vias-peajes", type: "circle", source: "vias", filter: capa("peaje"), minzoom: 8.5, paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3.5, 14, 6.5], "circle-color": "rgba(0, 11, 34, 0.75)",
+      "circle-stroke-color": VIAS.linea, "circle-stroke-width": 2 } });
+    mapa.addLayer({ id: "vias-aeropuerto", type: "circle", source: "vias", filter: capa("aeropuerto"), paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 6, 14, 10], "circle-color": "rgba(0, 26, 79, 0.6)",
+      "circle-stroke-color": VIAS.aeropuerto, "circle-stroke-width": 2.5 } });
+    mapa.addLayer({ id: "vias-aeropuerto-nombre", type: "symbol", source: "vias", filter: capa("aeropuerto"), minzoom: 10,
+      layout: { "text-field": ["concat", "Aeropuerto ", ["get", "nombre"]], "text-font": ["Noto Sans Regular"], "text-size": 12, "text-anchor": "left", "text-offset": [1.1, 0] },
+      paint: { "text-color": VIAS.aeropuerto, "text-halo-color": "#000B22", "text-halo-width": 1.6 } });
     mapa.addLayer({ id: "equipamientos", type: "circle", source: "equipamientos", minzoom: 13, paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.5, 16, 6],
       "circle-color": ["match", ["get", "categoria"]].concat(Object.keys(COLOR_CATEGORIA).reduce(function (a, k) { return a.concat([k, COLOR_CATEGORIA[k]]); }, []), ["#93A6C4"]),
@@ -352,10 +378,11 @@
     mapa.on("click", function (e) { if (clicSimulador(e)) e.preventDefault(); });
     mapa.on("click", "manzanas", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "vias-peajes", "vias-aeropuerto"] }).length) return;
+      if (alrededor(e.point, ["vias-tramos"]).length) return;
       seleccionarManzana(e.features[0].properties);
     });
-    ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "corr-centros"].forEach(function (capa) {
+    ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "corr-centros", "vias-tramos", "vias-peajes", "vias-aeropuerto"].forEach(function (capa) {
       mapa.on("mouseenter", capa, function () { mapa.getCanvas().style.cursor = "pointer"; });
       mapa.on("mouseleave", capa, function () { mapa.getCanvas().style.cursor = ""; });
     });
@@ -373,6 +400,14 @@
     mapa.on("click", "equipamientos", function (e) {
       if (estado.simulando) return;
       popup(e.features[0].geometry.coordinates, fichaEquipamiento(e.features[0]));
+    });
+    mapa.on("click", "vias-peajes", function (e) {
+      if (estado.simulando) return;
+      popup(e.features[0].geometry.coordinates, fichaPeaje(e.features[0].properties));
+    });
+    mapa.on("click", "vias-aeropuerto", function (e) {
+      if (estado.simulando) return;
+      popup(e.features[0].geometry.coordinates, fichaAeropuerto(e.features[0].properties));
     });
     mapa.on("click", "oficial-sedes", function (e) {
       if (estado.simulando || mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos"] }).length) return;
@@ -455,7 +490,9 @@
     var tip = $("#tooltip"), escritorio = window.matchMedia("(hover: hover)").matches;
     mapa.on("mousemove", function (e) {
       if (!escritorio) return;
-      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "manzanas", "corr-centros", "oficial-ambiente"].concat(CAPAS_ECO) })[0];
+      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "vias-peajes", "vias-aeropuerto"] })[0] ||
+        alrededor(e.point, ["vias-tramos"])[0] ||
+        mapa.queryRenderedFeatures(e.point, { layers: ["manzanas", "corr-centros", "oficial-ambiente", "vias-concesion"].concat(CAPAS_ECO) })[0];
       if (!f) { tip.hidden = true; return; }
       var html;
       if (f.layer.id === "manzanas") {
@@ -472,6 +509,14 @@
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>Corregimiento · clic para ver sus centros poblados</span>";
       } else if (f.layer.id === "corr-centros") {
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>" + escapar(f.properties.tipo) + " · " + escapar(f.properties.corregimiento) + "</span>";
+      } else if (f.layer.id === "vias-tramos") {
+        html = "<b>" + escapar(f.properties.sector) + "</b><span>" + escapar(f.properties.ruta ? "Ruta " + f.properties.ruta + " · " : "") + num(f.properties.km, 1) + " km · INVÍAS · clic para ver</span>";
+      } else if (f.layer.id === "vias-peajes") {
+        html = "<b>Peaje " + escapar(f.properties.nombre) + "</b><span>" + escapar(f.properties.responsable || "") + " · clic para ver</span>";
+      } else if (f.layer.id === "vias-aeropuerto") {
+        html = "<b>Aeropuerto " + escapar(f.properties.nombre) + "</b><span>Concesión ANI · clic para ver</span>";
+      } else if (f.layer.id === "vias-concesion") {
+        html = "<b>" + escapar(f.properties.nombre) + "</b><span>Concesión vial ANI · " + escapar(f.properties.estado || "") + "</span>";
       } else if (f.layer.id === "oficial-ambiente") {
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>" + escapar(OFICIAL[f.properties.capa].nombre) + "</span>";
       } else {
@@ -496,11 +541,16 @@
 
     mapa.on("click", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "manzanas"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "vias-peajes", "vias-aeropuerto"] }).length) return;
+      var via = alrededor(e.point, ["vias-tramos"])[0];
+      if (via) { popup(e.lngLat, fichaTramo(via.properties, mapa.queryRenderedFeatures(e.point, { layers: ["vias-concesion"] }))); return; }
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["manzanas"] }).length) return;
       var cp = mapa.queryRenderedFeatures(e.point, { layers: ["corr-centros"] })[0];
       if (cp) { popup(e.lngLat, fichaCentroPoblado(cp.properties)); return; }
       var o = mapa.queryRenderedFeatures(e.point, { layers: ["oficial-ambiente"] })[0];
       if (o) { popup(e.lngLat, fichaAmbienteOficial(o)); return; }
+      var con = mapa.queryRenderedFeatures(e.point, { layers: ["vias-concesion"] });
+      if (con.length) { popup(e.lngLat, fichaConcesiones(con)); return; }
       var f = mapa.queryRenderedFeatures(e.point, { layers: CAPAS_ECO })[0];
       if (!f) return;
       var eco = ECO[f.layer.id.replace("eco-", "")];
@@ -611,7 +661,7 @@
       b.addEventListener("click", function () {
         var on = b.getAttribute("aria-pressed") !== "true";
         b.setAttribute("aria-pressed", on ? "true" : "false");
-        var capas = { equipamientos: ["equipamientos"], sedes: ["oficial-sedes"], corregimientos: CAPAS_CORR, obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
+        var capas = { equipamientos: ["equipamientos"], sedes: ["oficial-sedes"], corregimientos: CAPAS_CORR, vias: CAPAS_VIAS, obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
         capas.forEach(function (c) { mapa.setLayoutProperty(c, "visibility", on ? "visible" : "none"); });
       });
     });
@@ -727,6 +777,7 @@
       ]));
     });
     cont.appendChild(el("p", { class: "fuente", texto: "Seleccione una manzana en el mapa para ver su ficha. Censo DANE 2018; comunas de OpenStreetMap (no oficiales)." }));
+    seccionConexiones(cont);
     var corrs = corregimientos();
     if (corrs.length) {
       cont.appendChild(el("h4", { class: "rotulo", texto: "Zona rural · " + num(corrs.length) + " corregimientos" }));
@@ -1044,6 +1095,13 @@
       indice.push({ tipo: "Corregimiento", nombre: f.properties.nombre, corregimiento: f.properties.nombre });
       centrosDe(f).slice(1).forEach(function (c) { indice.push({ tipo: "Caserío · " + f.properties.nombre, nombre: c.nombre, coords: c.punto, zoom: 15 }); });
     });
+    datos.vias.features.forEach(function (f) {
+      var p = f.properties;
+      if (p.capa === "tramo") indice.push({ tipo: "Vía nacional" + (p.ruta ? " · Ruta " + p.ruta : ""), nombre: p.sector, via: f });
+      else if (p.capa === "peaje") indice.push({ tipo: "Peaje · INVÍAS", nombre: "Peaje " + p.nombre, coords: f.geometry.coordinates, zoom: 14, ficha: fichaPeaje(p) });
+      else if (p.capa === "aeropuerto") indice.push({ tipo: "Aeropuerto · ANI", nombre: "Aeropuerto " + p.nombre, coords: f.geometry.coordinates, zoom: 13.5, ficha: fichaAeropuerto(p) });
+    });
+    if (datos.conexiones) indice.push({ tipo: "Panel", nombre: "Conexiones: terminal, aeropuerto y vías nacionales", conexiones: true });
     indice.forEach(function (x) { x.clave = normalizar(x.nombre); });
   }
   function abrirBuscador() { $("#buscador").hidden = false; $("#q").value = ""; buscar(); $("#q").focus(); }
@@ -1066,8 +1124,10 @@
     if (x.comuna) { mostrarPestana("territorio"); pintarComuna(x.comuna); return; }
     if (x.obra) { mostrarPestana("obras"); mostrarObra(x.obra); return; }
     if (x.corregimiento) { mostrarPestana("territorio"); pintarCorregimiento(x.corregimiento); return; }
+    if (x.conexiones) { pintarConexiones(); return; }
+    if (x.via) { verTramo(x.via); return; }
     mapa.flyTo({ center: x.coords, zoom: x.zoom, pitch: estado.tres_d ? 60 : 0, duration: 1600 });
-    popup(x.coords, "<b>" + escapar(x.nombre) + "</b><br><span style='color:#93A6C4'>" + escapar(x.tipo) + "</span>");
+    popup(x.coords, x.ficha || "<b>" + escapar(x.nombre) + "</b><br><span style='color:#93A6C4'>" + escapar(x.tipo) + "</span>");
   }
   function enlazarBuscador() {
     $("#abrir-buscador").addEventListener("click", abrirBuscador);
@@ -1082,6 +1142,8 @@
         botones.forEach(function (b, i) { b.setAttribute("aria-selected", i === elegido ? "true" : "false"); });
         botones[elegido].scrollIntoView({ block: "nearest" });
       } else if (e.key === "Enter" && $("#resultados")._res && $("#resultados")._res[elegido]) {
+        // Sin esto, la misma pulsación activa el botón de cerrar de la ventana recién abierta, que recibe el foco
+        e.preventDefault();
         ir($("#resultados")._res[elegido]);
       }
     });
@@ -1133,6 +1195,151 @@
     var p = f.properties, capa = OFICIAL[p.capa];
     return "<b>" + escapar(p.nombre) + "</b><br><span style='color:" + capa.color + "'>" + escapar(capa.nombre) + "</span><br>" +
       "<span style='color:#93A6C4'>" + escapar(p.detalle) + "</span><br><span style='color:#93A6C4'>Capa oficial · geoportal SIG-CVS</span>";
+  }
+
+  // ---------- Vías nacionales y conexiones ----------
+  // Las líneas son delgadas: se busca en un cuadro de unos píxeles alrededor del clic
+  function alrededor(punto, capas) {
+    return mapa.queryRenderedFeatures([[punto.x - 5, punto.y - 5], [punto.x + 5, punto.y + 5]], { layers: capas });
+  }
+  function fichaTramo(p, concesiones) {
+    var rasgos = [p.categoria, p.calzada ? "calzada " + p.calzada.toLowerCase() : null, p.superficie].filter(Boolean);
+    var html = "<b>" + escapar(p.sector) + "</b><br><span style='color:" + VIAS.linea + "'>" + escapar((p.ruta ? "Ruta " + p.ruta + " · " : "") + p.nombre_ruta) + "</span>" +
+      "<br>Tramo " + escapar(p.codigo) + " · " + num(p.km, 1) + " km (" + escapar(p.pr) + ")" +
+      "<br>A cargo de: " + escapar(p.administrador || "s. d.") + (rasgos.length ? "<br><span style='color:#93A6C4'>" + escapar(rasgos.join(" · ")) + "</span>" : "");
+    var vistas = {};
+    (concesiones || []).forEach(function (c) {
+      if (vistas[c.properties.nombre]) return;
+      vistas[c.properties.nombre] = true;
+      html += "<br><span style='color:" + VIAS.concesion + "'>Concesión ANI: " + escapar(c.properties.nombre) + " · " + escapar(c.properties.estado || "s. d.") + "</span>";
+    });
+    return html + "<br><span style='color:#93A6C4'>Capa oficial · INVÍAS" + (p.fuente_geometria ? " · geometría: " + escapar(p.fuente_geometria) : "") +
+      "</span><p class='falta'>Longitud entre postes de referencia (PR) de INVÍAS.</p>";
+  }
+  function fichaPeaje(p) {
+    return "<b>Peaje " + escapar(p.nombre) + "</b><br><span style='color:" + VIAS.linea + "'>" + escapar(p.sector || "") + (p.codigo ? " · tramo " + escapar(p.codigo) : "") + "</span>" +
+      "<br>Responsable: " + escapar(p.responsable || "s. d.") + (p.tarifa_i ? "<br>Tarifa categoría I: " + pesos(p.tarifa_i) : "") +
+      "<br><span style='color:#93A6C4'>Capa oficial · INVÍAS</span>";
+  }
+  function fichaAeropuerto(p) {
+    var a = datos.conexiones && datos.conexiones.aereo;
+    var html = "<b>Aeropuerto " + escapar(p.nombre) + "</b><br><span style='color:" + VIAS.aeropuerto + "'>Concesión ANI · " + escapar(p.proyecto || "") + "</span>" +
+      (p.concesionario ? "<br>" + escapar(p.concesionario) : "");
+    if (a) {
+      html += "<br><br>" + num(a.pasajeros) + " pasajeros salieron de aquí en " + a.anio + ". Principales destinos: " +
+        a.nacionales.slice(0, 3).map(function (d) { return escapar(d.ciudad) + " (" + num(d.pasajeros) + ")"; }).join(", ") + ".";
+    }
+    return html + "<br><span style='color:#93A6C4'>ANI (ubicación y concesión) · Aerocivil (pasajeros)</span>";
+  }
+  function fichaConcesiones(fs) {
+    var vistas = {}, html = "";
+    fs.forEach(function (f) {
+      var p = f.properties;
+      if (vistas[p.nombre]) return;
+      vistas[p.nombre] = true;
+      html += (html ? "<br><br>" : "") + "<b>" + escapar(p.nombre) + "</b><br><span style='color:" + VIAS.concesion + "'>Concesión vial ANI · " + escapar(p.estado || "s. d.") + "</span>" +
+        "<br><span style='color:#93A6C4'>" + escapar([p.generacion, p.ola].filter(Boolean).join(" · ")) + "</span>";
+    });
+    return html + "<br><span style='color:#93A6C4'>Capa oficial · ANI · trazado aproximado</span>";
+  }
+  function tramosCorredor(c) {
+    var claves = {};
+    c.tramos.forEach(function (t) { claves[t.codigo + "|" + t.sector] = true; });
+    return datos.vias.features.filter(function (f) { return f.properties.capa === "tramo" && claves[f.properties.codigo + "|" + f.properties.sector]; });
+  }
+  function limitesDe(fs) {
+    var b = new maplibregl.LngLatBounds();
+    fs.forEach(function (f) {
+      var g = f.geometry;
+      if (g.type === "Point") b.extend(g.coordinates);
+      else g.coordinates.forEach(function (l) { l.forEach(function (q) { b.extend(q); }); });
+    });
+    return b;
+  }
+  function verTramos(fs) {
+    if (!fs.length) return;
+    mapa.fitBounds(limitesDe(fs), { padding: paddingMapa(), maxZoom: 13, pitch: 0, bearing: 0, duration: 1600 });
+  }
+  function verVias() {
+    verTramos([].concat.apply([], datos.conexiones.corredores.map(tramosCorredor)));
+  }
+  function verTramo(f) {
+    var l = f.geometry.coordinates.reduce(function (a, x) { return x.length > a.length ? x : a; });
+    verTramos([f]);
+    popup(l[Math.floor(l.length / 2)], fichaTramo(f.properties));
+  }
+  function verTerminal() {
+    var t = datos.equipamientos.features.filter(function (f) { return /terminal de transporte/i.test(f.properties.nombre || ""); })[0];
+    if (!t) return;
+    mapa.flyTo({ center: t.geometry.coordinates, zoom: 16, pitch: estado.tres_d ? 55 : 0, duration: 1600 });
+    popup(t.geometry.coordinates, fichaEquipamiento(t));
+  }
+  function textoCorredor(c) {
+    return "Montería → " + c.hitos.map(function (h) { return h.lugar + " " + num(h.km, 1) + " km"; }).join(" → ");
+  }
+  function seccionConexiones(cont) {
+    var cx = datos.conexiones;
+    if (!cx) return;
+    cont.appendChild(el("h4", { class: "rotulo", texto: "Conexiones · vías nacionales" }));
+    cont.appendChild(herramientas([["Ver vías nacionales", verVias], ["Terminal y aeropuerto", pintarConexiones]]));
+    cx.corredores.forEach(function (c) {
+      cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () { verTramos(tramosCorredor(c)); } }, [
+        el("div", { class: "titulo", texto: c.nombre }),
+        el("div", { class: "meta", texto: textoCorredor(c) })
+      ]));
+    });
+    cont.appendChild(el("p", { class: "fuente", texto: "Suma de las longitudes oficiales de los tramos (postes de referencia de INVÍAS); no incluye el recorrido dentro de la ciudad." }));
+  }
+  function pintarConexiones() {
+    var cx = datos.conexiones;
+    if (!cx) return;
+    limpiarSeleccion();
+    estado.comunaVista = null;
+    marcarComuna(null);
+    mostrarPestana("territorio");
+    verVias();
+    var t = cx.terminal, a = cx.aereo, v = $("#vista-territorio");
+    v.innerHTML = "";
+    var maxD = Math.max.apply(null, t.destinos.map(function (d) { return d.despachos; }));
+    var cont = el("div", { class: "aparecer" }, [
+      volver(),
+      el("div", { class: "rotulo", texto: "Conexiones", style: "margin-top:12px" }),
+      el("h3", { texto: "Montería con la región y el país" }),
+      el("div", { class: "subtitulo", texto: "Vías nacionales, terminal de transporte y aeropuerto" }),
+      el("h4", { class: "rotulo", texto: "Corredores por la red vial nacional" })
+    ]);
+    cx.corredores.forEach(function (c) {
+      cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () { verTramos(tramosCorredor(c)); } }, [
+        el("div", { class: "titulo", texto: c.nombre }),
+        el("div", { class: "meta", texto: textoCorredor(c) }),
+        el("div", { class: "meta", texto: c.tramos.map(function (x) { return x.sector + " (" + x.codigo + ", " + num(x.km, 1) + " km, " + (x.administrador || "s. d.") + ")"; }).join(" · ") })
+      ]));
+    });
+    cont.appendChild(aviso("Las longitudes suman los tramos oficiales entre postes de referencia de INVÍAS y no incluyen el recorrido dentro de las ciudades. La vía a Tierralta y las demás vías hacia el sur del municipio no hacen parte de la red vial nacional."));
+    cont.appendChild(el("h4", { class: "rotulo", texto: "Terminal de transporte · " + t.anio }));
+    cont.appendChild(herramientas([["Ver la terminal en el mapa", verTerminal]]));
+    cont.appendChild(el("div", { class: "cifras" }, [cifra("Despachos", num(t.despachos)), cifra("Pasajeros", num(t.pasajeros)), cifra("Destinos", num(t.destinos.length))]));
+    t.destinos.slice(0, 12).forEach(function (d) {
+      var rel = el("div", { class: "relleno" });
+      rel.style.background = VIAS.linea; rel.style.width = "0%";
+      requestAnimationFrame(function () { requestAnimationFrame(function () { rel.style.width = d.despachos / maxD * 100 + "%"; }); });
+      cont.appendChild(el("div", { class: "barra-dist" }, [
+        el("div", { class: "cab" }, [el("span", { texto: d.nombre + " · " + d.departamento + (d.km_red_nacional ? " · " + num(d.km_red_nacional, 1) + " km por vías nacionales" : "") }),
+          el("span", { class: "mono", texto: num(d.despachos) })]),
+        el("div", { class: "pista" }, [rel])
+      ]));
+    });
+    cont.appendChild(el("p", { class: "fuente", texto: "Despachos de vehículos y pasajeros con origen en Montería, " + t.anio + ". Fuente: SuperTransporte. La ubicación de la terminal es la de OpenStreetMap." }));
+    cont.appendChild(el("h4", { class: "rotulo", texto: "Aeropuerto " + a.nombre + " · " + a.anio }));
+    cont.appendChild(el("div", { class: "cifras" }, [cifra("Pasajeros", num(a.pasajeros)), cifra("Destinos en Colombia", num(a.nacionales.length)), cifra("Al exterior", num(a.internacionales.pasajeros))]));
+    a.nacionales.slice(0, 6).forEach(function (d) {
+      cont.appendChild(el("div", { class: "tarjeta" }, [
+        el("div", { class: "titulo", texto: d.ciudad + " (" + d.codigo + ")" }),
+        el("div", { class: "meta", texto: num(d.pasajeros) + " pasajeros · " + num(d.pasajeros / a.pasajeros * 100, 1) + "% del total" })
+      ]));
+    });
+    cont.appendChild(el("p", { class: "fuente", texto: "Pasajeros por destino final (origen-destino): incluye viajes con conexión, no solo vuelos directos. Fuente: Aerocivil. Concesión del aeropuerto: ANI." }));
+    v.appendChild(cont);
   }
 
   // ---------- Vista limpia: solo el mapa ----------
@@ -1595,10 +1802,11 @@
     cargar("data/contexto.json"), cargar("data/manzanas.geojson"), cargar("data/equipamientos.geojson"),
     cargar("data/obras.geojson"), cargar("data/resumen.json"),
     opcional("data/fuentes_oficiales.json", {}), opcional("data/oficial_sedes_educativas.geojson", VACIA),
-    opcional("data/oficial_ambiente.geojson", VACIA), opcional("data/corregimientos.geojson", VACIA)
+    opcional("data/oficial_ambiente.geojson", VACIA), opcional("data/corregimientos.geojson", VACIA),
+    opcional("data/vias_nacionales.geojson", VACIA), opcional("data/conexiones.json", null)
   ]).then(function (r) {
     datos = { contexto: r[0], manzanas: r[1], equipamientos: r[2], obras: r[3], resumen: r[4],
-      oficiales: r[5], oficialSedes: r[6], oficialAmbiente: r[7], corregimientos: r[8] };
+      oficiales: r[5], oficialSedes: r[6], oficialAmbiente: r[7], corregimientos: r[8], vias: r[9], conexiones: r[10] };
     calcularIndice();
     calcularCortes();
     pintarKpis(); pintarLentes(); enlazarControles(); pintarFuentes();

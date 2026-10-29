@@ -105,6 +105,7 @@
     <button class="chip" type="button" data-capa="equipamientos" aria-pressed="true"><i style="background:#4FC3F7"></i>Equipamientos</button>
     <button class="chip" type="button" data-capa="sedes" aria-pressed="true"><i class="aro" style="border-color:#4FC3F7"></i>Sedes oficiales MinEducación</button>
     <button class="chip" type="button" data-capa="corregimientos" aria-pressed="true"><i style="background:#FDBA74"></i>Corregimientos</button>
+    <button class="chip" type="button" data-capa="vias" aria-pressed="true"><i class="linea" style="background:#E879F9"></i>Vías nacionales INVÍAS</button>
     <button class="chip" type="button" data-capa="obras" aria-pressed="true"><i style="background:#FFB900"></i>Obras comunicadas</button>
     <button class="chip" type="button" data-capa="comunas" aria-pressed="true"><i style="background:#FBFAF6"></i>Comunas</button>
   </div>
@@ -139,7 +140,7 @@
   <div class="buscador-caja vidrio" role="dialog" aria-modal="true" aria-label="Buscar">
     <div class="buscador-entrada">
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-      <input id="q" type="search" autocomplete="off" placeholder="Escriba un barrio, comuna, equipamiento u obra" aria-label="Buscar" aria-controls="resultados">
+      <input id="q" type="search" autocomplete="off" placeholder="Escriba un barrio, comuna, vía, equipamiento u obra" aria-label="Buscar" aria-controls="resultados">
       <kbd>Esc</kbd>
     </div>
     <ul id="resultados" role="listbox"></ul>
@@ -153,7 +154,7 @@
       <button class="boton-icono" type="button" data-cerrar aria-label="Cerrar">✕</button>
     </div>
     <div class="aviso"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-      <span>Las comunas y el perímetro provienen de OpenStreetMap y no son límites oficiales del POT. Las distancias son en línea recta. Las obras de Instagram son comunicaciones de la Alcaldía, no verificaciones independientes. Las capas oficiales (MinEducación, CVS) se muestran con borde continuo o aro hueco; las sedes de MinEducación tienen ubicación aproximada. <a href="https://www.monteria.gov.co/publicaciones/5395/pot-plan-de-ordenamiento-territorial-2021-2032/" target="_blank" rel="noopener noreferrer">Consultar el POT (Acuerdo 003 de 2021)</a>.</span></div>
+      <span>Las comunas y el perímetro provienen de OpenStreetMap y no son límites oficiales del POT. Las distancias a equipamientos son en línea recta; las longitudes de las vías nacionales salen de los postes de referencia de INVÍAS y no incluyen el recorrido urbano. Las obras de Instagram son comunicaciones de la Alcaldía, no verificaciones independientes. Las capas oficiales (MinEducación, CVS, INVÍAS, ANI) se muestran con borde o línea continua o aro hueco; las sedes de MinEducación tienen ubicación aproximada. <a href="https://www.monteria.gov.co/publicaciones/5395/pot-plan-de-ordenamiento-territorial-2021-2032/" target="_blank" rel="noopener noreferrer">Consultar el POT (Acuerdo 003 de 2021)</a>.</span></div>
     <ul id="lista-fuentes"></ul>
     <p class="fuente">Versión anterior: <a href="v1/">Geovisor v1.0</a>. Mapa base © OpenStreetMap contributors (ODbL), © CARTO.</p>
   </div>
