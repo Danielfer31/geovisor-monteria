@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+# Descargas crudas de datos abiertos (el REPS incluye datos personales de profesionales independientes)
+fuentes_abiertas/
