@@ -1,12 +1,15 @@
 """Integra al visor las fuentes oficiales bajadas con tools/datos_abiertos.py.
 
-Uso (desde la raíz, después de `datos_abiertos.py descargar` y `datos_abiertos.py cvs`):
+Uso (desde la raíz, después de `datos_abiertos.py descargar`, `cvs`, `pot` y `vias`):
     python3 tools/integrar_oficiales.py
+    python3 tools/integrar_oficiales.py vias   # solo vías y conexiones; actualiza el manifiesto existente
 
 Lee fuentes_abiertas/ (crudo, fuera del repositorio) y escribe:
     data/oficial_sedes_educativas.geojson  sedes MinEducación que no aparecen en OSM
     data/oficial_ambiente.geojson          humedales con PMA y áreas protegidas RUNAP de la CVS
     data/corregimientos.geojson            límite municipal y centros poblados del POT por corregimiento
+    data/vias_nacionales.geojson           red vial nacional (INVÍAS), concesiones y peajes alrededor de Montería
+    data/conexiones.json                   corredores nacionales, destinos de la terminal y del aeropuerto
     data/fuentes_oficiales.json            procedencia, licencias y resultado del cruce
 
 Nombres para los equipamientos OSM sin nombre: solo se asignan si una fuente oficial de la misma
@@ -18,6 +21,7 @@ import difflib
 import json
 import math
 import re
+import sys
 import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -141,6 +145,237 @@ def corregimientos(hoy):
     return {"type": "FeatureCollection", "features": feats}, fuente, len(grupos), len(centros["features"])
 
 
+# ---------- Vías nacionales y conexiones ----------
+# Lo que alcanza a verse en el visor (límite del municipio con el margen de maxBounds en app.js)
+REGION_VISOR = (-76.65, 7.95, -75.25, 9.3)
+DOMINIOS_INVIAS = {
+    "administrador": {"1": "INVÍAS", "2": "ANI", "3": "Concesión departamental", "4": "FINDETER", "5": "Vía en desuso", "6": "INVÍAS (convenio)"},
+    "categoria": {"1": "Primer orden", "2": "Segundo orden", "3": "Tercer orden"},
+    "superficie": {"1": "Pavimentada", "2": "Sin pavimentar"},
+    "calzada": {"1": "Sencilla", "2": "Doble"},
+}
+# Tramos oficiales encadenados desde Montería. Las longitudes salen de los postes de referencia (PR) de
+# INVÍAS: en doble calzada la geometría trae las dos calzadas y su longitud se duplica. El hito es el
+# lugar al final del tramo, tomado del nombre del sector. Ningún corredor incluye el recorrido urbano.
+CORREDORES = [
+    ("Ruta 21 · Cereté y Lorica", [("2103", "Montería - Cereté", "Cereté"), ("2103", "Paso Nacional por Cereté", None),
+                                   ("2103", "Cereté - Lorica", "Lorica")]),
+    ("Ruta 74 · Cereté y la Troncal de Occidente", [("2103", "Montería - Cereté", "Cereté"),
+                                                    ("7402", "Cereté - Cruce Ruta 25 (La Ye)", "Cruce con la Troncal de Occidente (La Ye)")]),
+    ("Ruta 23 · Planeta Rica", [("2310", "Planeta Rica - Montería", "Planeta Rica")]),
+    ("Ruta 74 · Puerto Rey y Arboletes", [("7401", "Puerto Rey - Monteria", "Puerto Rey"), ("9002", "Arboletes – Puerto Rey", "Arboletes")]),
+]
+EMPALME_M = 1000  # distancia máxima entre tramos consecutivos de un corredor
+
+
+def en_region(p):
+    return REGION_VISOR[0] <= p[0] <= REGION_VISOR[2] and REGION_VISOR[1] <= p[1] <= REGION_VISOR[3]
+
+
+def simplificar(linea, tol=0.00008):
+    """Douglas-Peucker (~9 m): suficiente para la escala regional y reduce el archivo."""
+    if len(linea) < 3:
+        return linea
+    (x0, y0), (x1, y1) = linea[0], linea[-1]
+    dx, dy = x1 - x0, y1 - y0
+    n = math.hypot(dx, dy) or 1e-12
+    i, dmax = 0, -1
+    for k in range(1, len(linea) - 1):
+        d = abs(dy * linea[k][0] - dx * linea[k][1] + x1 * y0 - y1 * x0) / n
+        if d > dmax:
+            i, dmax = k, d
+    if dmax <= tol:
+        return [linea[0], linea[-1]]
+    return simplificar(linea[:i + 1], tol)[:-1] + simplificar(linea[i:], tol)
+
+
+def pr(p, cual):
+    return float(p.get(f"poste_de_referencia_{cual}") or 0) * 1000 + float(p.get(f"distancia_{cual}") or 0)
+
+
+def texto_pr(m):
+    return f"PR{int(m // 1000)}+{int(round(m % 1000)):03d}"
+
+
+def km_pr(p):
+    return round((pr(p, "final") - pr(p, "inicial")) / 1000, 1)
+
+
+def sector_legible(s):
+    s = (s or "").strip()
+    return titulo(s.lower()) if s.isupper() else s
+
+
+def municipio(m):
+    nombre = titulo(m["nom_mpio"].lower()).replace("D.c.", "D.C.")
+    return {"divipola": m["cod_mpio"], "nombre": nombre, "departamento": titulo(m["dpto"].lower()).replace("D.c.", "D.C.")}
+
+
+def vias(hoy):
+    red = leer("invias_red_vial.geojson")
+    peajes = leer("invias_peajes.json")
+    concesiones = leer("ani_concesiones_carreteras.geojson")
+    aeropuertos = leer("ani_concesiones_aeroportuarias.geojson")
+    divipola = {m["cod_mpio"]: m for m in leer("dane_divipola_municipios.json")["filas"]}
+    terminal = leer("supertransporte_terminal_monteria.json")
+    aereo = leer("aerocivil_origen_destino_monteria.json")
+
+    # 1. Tramos de la red nacional que se ven en el visor (el conjunto repite 100 tramos idénticos)
+    feats, vistos, por_clave = [], set(), {}
+    for f in red["features"]:
+        p, g = f["properties"], f["geometry"]
+        if not g:
+            continue
+        clave = (p.get("codigo_tramo"), p.get("sector"), pr(p, "inicial"), pr(p, "final"), json.dumps(g["coordinates"][0][:2]))
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        por_clave.setdefault((p.get("codigo_tramo"), (p.get("sector") or "").strip()), []).append(f)
+        # El visor no reproduce geometrías que la propia fuente declara tomadas de Google Maps (sus términos lo prohíben)
+        if not any(en_region(q) for linea in g["coordinates"] for q in linea) or p.get("fuente") == "Google Maps":
+            continue
+        lineas = [[[round(x, 5), round(y, 5)] for x, y in simplificar(linea)] for linea in g["coordinates"] if len(linea) > 1]
+        props = {"capa": "tramo", "codigo": p.get("codigo_tramo"), "ruta": (p.get("ruta") or "").strip() or None,
+                 "nombre_ruta": p.get("nombre_ruta"), "sector": sector_legible(p.get("sector")), "km": km_pr(p),
+                 "pr": f"{texto_pr(pr(p, 'inicial'))} a {texto_pr(pr(p, 'final'))}"}
+        # «Por Defnir» es una errata de la fuente para «por definir»: se trata como vacío
+        if p.get("fuente") and not p["fuente"].lower().startswith("por def"):
+            props["fuente_geometria"] = p["fuente"]
+        for campo, dominio in DOMINIOS_INVIAS.items():
+            # «Por definir» y los vacíos se omiten: el visor no rellena atributos que la fuente no trae
+            if dominio.get(p.get(campo)):
+                props[campo] = dominio[p[campo]]
+        feats.append({"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": lineas}, "properties": props})
+    n_tramos = len(feats)
+
+    for f in concesiones["features"]:
+        a = f["properties"]
+        g = f["geometry"]
+        lineas = [g["coordinates"]] if g["type"] == "LineString" else g["coordinates"]
+        feats.append({"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [
+            [[round(x, 5), round(y, 5)] for x, y in simplificar(l, 0.0002)] for l in lineas]}, "properties": {
+            "capa": "concesion", "nombre": a["NOMBRE"].strip().rstrip("."), "generacion": a.get("GEN"),
+            "ola": a.get("OLA_4G") if a.get("OLA_4G") not in (None, "No aplica") else None, "estado": a.get("ESTADO")}})
+
+    n_peajes = 0
+    for r in peajes["filas"]:
+        punto = (r.get("point") or {}).get("coordinates")
+        # Las columnas latitud/longitud traen errores (latitud repetida); se usa la geometría publicada
+        if not punto or not en_region(punto):
+            continue
+        n_peajes += 1
+        nombre = r["nombre_peaje"].strip()
+        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(punto[0], 5), round(punto[1], 5)]}, "properties": {
+            "capa": "peaje", "nombre": titulo(nombre.lower()) if nombre.isupper() else nombre, "sector": r.get("sector"),
+            "responsable": r.get("responsable"), "codigo": r.get("c_digo_tramo"),
+            "administrador": DOMINIOS_INVIAS["administrador"].get(r.get("administrador")),
+            "tarifa_i": int(float(r["categoria_i"])) if r.get("categoria_i") else None}})
+
+    garzones = next(f for f in aeropuertos["features"] if "Montería" in f["properties"]["LISTA_AERO"])
+    a = garzones["properties"]
+    x, y = garzones["geometry"]["coordinates"][0]
+    feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(x, 5), round(y, 5)]}, "properties": {
+        "capa": "aeropuerto", "nombre": a["LISTA_AERO"], "proyecto": a.get("PROYECTO"), "contrato": a.get("CONTRATO"),
+        "concesionario": re.sub(r"\s*\n\s*", " · ", a.get("CCNARIO") or "").strip() or None}})
+
+    # 2. Corredores: tramos oficiales encadenados, con verificación de que se toquen
+    corredores = []
+    for nombre, pasos in CORREDORES:
+        tramos, hitos, total, previo = [], [], 0.0, None
+        for codigo, sector, hito in pasos:
+            fs = por_clave.get((codigo, sector))
+            if not fs:
+                raise SystemExit(f"Corredor «{nombre}»: no está el tramo {codigo} «{sector}» en la red de INVÍAS")
+            p = fs[0]["properties"]
+            puntos = [q for f in fs for linea in f["geometry"]["coordinates"] for q in (linea[0], linea[-1])]
+            if previo and min(distancia_m(a, b) for a in previo for b in puntos) > EMPALME_M:
+                raise SystemExit(f"Corredor «{nombre}»: el tramo {codigo} «{sector}» no empalma con el anterior")
+            previo = puntos
+            km = km_pr(p)
+            total += km
+            tramos.append({"codigo": codigo, "sector": sector, "km": km,
+                           "administrador": DOMINIOS_INVIAS["administrador"].get(p.get("administrador"))})
+            if hito:
+                hitos.append({"lugar": hito, "km": round(total, 1)})
+        corredores.append({"nombre": nombre, "tramos": tramos, "hitos": hitos})
+    km_hito = {" ".join(fichas(h["lugar"])): h["km"] for c in corredores for h in c["hitos"]}
+
+    # 3. Destinos desde la terminal y el aeropuerto en el último año completo
+    destinos = []
+    for r in terminal["filas"]:
+        m = divipola.get(r["municipio_destino_ruta"])
+        if not m:
+            continue
+        d = {**municipio(m), "despachos": int(r["despachos"]), "pasajeros": int(r["pasajeros"])}
+        if " ".join(fichas(d["nombre"])) in km_hito:
+            d["km_red_nacional"] = km_hito[" ".join(fichas(d["nombre"]))]
+        destinos.append(d)
+    nacionales, internacionales = {}, {"pasajeros": 0, "destinos": 0}
+    for r in aereo["filas"]:
+        pas = int(float(r["pasajeros"]))
+        if r["pais_destino"] != "COLOMBIA":
+            internacionales["pasajeros"] += pas
+            internacionales["destinos"] += 1
+            continue
+        d = nacionales.setdefault(r["destino"], {"codigo": r["destino"], "ciudad": titulo(r["ciudad_destino"].lower()).replace("D.c.", "D.C."), "pasajeros": 0})
+        d["pasajeros"] += pas
+    conexiones = {
+        "generado": hoy,
+        "corredores": corredores,
+        "terminal": {"nombre": "Terminal de Transporte de Montería", "anio": terminal["anio"],
+                     "despachos": sum(d["despachos"] for d in destinos), "pasajeros": sum(d["pasajeros"] for d in destinos),
+                     "destinos": destinos},
+        "aereo": {"nombre": a["LISTA_AERO"], "anio": aereo["anio"],
+                  "pasajeros": sum(d["pasajeros"] for d in nacionales.values()) + internacionales["pasajeros"],
+                  "nacionales": sorted(nacionales.values(), key=lambda d: -d["pasajeros"]), "internacionales": internacionales},
+    }
+
+    (DATA / "vias_nacionales.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    (DATA / "conexiones.json").write_text(json.dumps(conexiones, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    cc_by_sa = "CC BY-SA 4.0"
+    ani_uso = concesiones["fuente"].get("licencia") or "Sin condiciones de uso declaradas"
+    fuentes = [
+        {"id": "ie7y-asdn", "nombre": "INVÍAS · Red vial nacional", "entidad": red["fuente"]["entidad"], "licencia": cc_by_sa,
+         "actualizado": fecha(red["fuente"].get("actualizado")), "descargado": hoy, "url": "https://www.datos.gov.co/d/ie7y-asdn",
+         "uso": f"{n_tramos} tramos alrededor de Montería. Longitudes según los postes de referencia (PR): en doble calzada la "
+                "geometría incluye las dos calzadas y su longitud se duplica. Atributos «por definir» en la fuente no se muestran"},
+        {"id": "68qj-5xux", "nombre": "INVÍAS · Peajes de la red vial nacional", "entidad": peajes["entidad"], "licencia": cc_by_sa,
+         "actualizado": fecha(peajes.get("actualizado")), "descargado": hoy, "url": "https://www.datos.gov.co/d/68qj-5xux",
+         "uso": f"{n_peajes} peajes alrededor de Montería con su tarifa de categoría I"},
+        {"id": concesiones["fuente"]["item"], "nombre": "ANI · Concesiones carreteras y aeroportuarias",
+         "entidad": concesiones["fuente"].get("credito") or "Agencia Nacional de Infraestructura", "licencia": ani_uso,
+         "actualizado": fecha(concesiones["fuente"].get("editado")), "descargado": hoy,
+         "url": f"https://www.arcgis.com/home/item.html?id={concesiones['fuente']['item']}",
+         "uso": f"{len(concesiones['features'])} concesiones viales en la región con su estado, y la concesión del aeropuerto Los Garzones"},
+        {"id": "eh75-8ah6", "nombre": "SuperTransporte · Despachos de pasajeros por carretera desde las terminales",
+         "entidad": terminal["entidad"], "licencia": cc_by_sa, "actualizado": fecha(terminal.get("actualizado")), "descargado": hoy,
+         "url": "https://www.datos.gov.co/d/eh75-8ah6",
+         "uso": f"Destinos servidos desde la terminal de Montería en {terminal['anio']} ({len(destinos)} municipios)"},
+        {"id": "gb6w-ynu4", "nombre": "Aerocivil · Tráfico origen-destino de pasajeros", "entidad": aereo["entidad"],
+         "licencia": cc_by_sa, "actualizado": fecha(aereo.get("actualizado")), "descargado": hoy, "url": "https://www.datos.gov.co/d/gb6w-ynu4",
+         "uso": f"Destinos de los pasajeros que salieron de Los Garzones en {aereo['anio']} (origen-destino, incluye viajes con conexión)"},
+        {"id": "gdxc-w37w", "nombre": "DANE · DIVIPOLA, códigos de municipios", "entidad": "Departamento Administrativo Nacional de Estadística",
+         "licencia": cc_by_sa, "actualizado": fecha(leer("dane_divipola_municipios.json").get("actualizado")), "descargado": hoy,
+         "url": "https://www.datos.gov.co/d/gdxc-w37w", "uso": "Nombres de los municipios de destino de la terminal"},
+    ]
+    return fuentes, NOTAS_VIAS
+
+
+NOTAS_VIAS = [
+    "INVÍAS · distancias puerta a puerta: la red vial nacional no incluye los recorridos urbanos (el tramo a Cereté empieza "
+    "al norte de la ciudad, cerca del aeropuerto), así que el visor solo suma las longitudes oficiales de los tramos",
+    "Vía Montería – Tierralta y demás vías hacia el sur del municipio: no hacen parte de la red vial nacional de INVÍAS, y el "
+    "inventario SINC de MinTransporte no trae ejes viales de Montería",
+    "Peaje San Carlos (Concesión Ruta al Mar): está en el conjunto de peajes, pero su tramo (3306, Montería – San Carlos) "
+    "no aparece en la red vial de INVÍAS",
+    "POT de Montería · ejes viales, vías primarias, red secundaria y red terciaria propuesta: sin nombres de vía y sin licencia "
+    "declarada; no se integran",
+    "Terminal de transporte: ninguna fuente oficial abierta publica su ubicación; el visor usa el punto de OpenStreetMap",
+    "INVÍAS · Variante Oriental de Sincelejo (25SCA): la fuente declara que su geometría viene de Google Maps; no se reproduce",
+]
+
+
 def main():
     equip = json.loads((DATA / "equipamientos.geojson").read_text(encoding="utf-8"))
     osm = equip["features"]
@@ -227,6 +462,7 @@ def main():
 
     hoy = date.today().isoformat()
     corr, fuente_pot, n_corr, n_centros = corregimientos(hoy)
+    fuentes_vias, notas_vias = vias(hoy) if (CRUDO / "invias_red_vial.geojson").exists() else ([], [])
     cvs_uso = ("Uso permitido citando a la CVS como autora (restricciones de uso del geoportal); "
                "geometrías simplificadas a ~20 m para el visor")
     manifiesto = {
@@ -251,13 +487,13 @@ def main():
              "actualizado": fecha(runap["fuente"].get("editado")), "descargado": hoy,
              "url": "https://inicio-sigcvs.hub.arcgis.com", "uso": f"{len(runap['features'])} polígonos alrededor de Montería · lente Ambiente"},
             fuente_pot,
-        ],
+        ] + fuentes_vias,
         "no_disponibles": [
             "Alcaldía de Montería · Geoposicionamiento de instituciones educativas (ew4g-9n55) y Zonas Wifi (qyrr-zx9j): "
             "enlazados desde monteria.gov.co, pero datos.gov.co responde que ya no existen",
             "MinTIC · Zonas Digitales Urbanas (wg2u-d8ji): sin coordenadas y sin filas para Montería",
             "CVS · rondas hídricas: el geoportal no las publica como capa descargable",
-        ],
+        ] + notas_vias,
         "cruce_sin_nombre": cruce,
     }
 
@@ -276,5 +512,20 @@ def main():
     print(f"POT: {n_corr} corregimientos · {n_centros} centros poblados")
 
 
+def solo_vias():
+    """Integra vías y conexiones sin rehacer las demás capas: reemplaza sus entradas en el manifiesto."""
+    hoy = date.today().isoformat()
+    fuentes, notas = vias(hoy)
+    ruta = DATA / "fuentes_oficiales.json"
+    manifiesto = json.loads(ruta.read_text(encoding="utf-8"))
+    ids = {f["id"] for f in fuentes}
+    manifiesto["generado"] = hoy
+    manifiesto["fuentes"] = [f for f in manifiesto["fuentes"] if f["id"] not in ids] + fuentes
+    manifiesto["no_disponibles"] = [n for n in manifiesto["no_disponibles"] if n not in notas] + notas
+    ruta.write_text(json.dumps(manifiesto, ensure_ascii=False, indent=1), encoding="utf-8")
+    for f in fuentes:
+        print(f"{f['nombre']}: {f['uso']}")
+
+
 if __name__ == "__main__":
-    main()
+    solo_vias() if sys.argv[1:] == ["vias"] else main()
