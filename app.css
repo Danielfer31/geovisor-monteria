@@ -218,9 +218,14 @@ button.tarjeta:hover { border-color: var(--borde); }
 @media (max-width: 760px) {
   #barra { top: 10px; left: 10px; right: 10px; height: 56px; gap: 8px; padding: 0 6px 0 10px; }
   .marca span, .estado-datos, #abrir-buscador span, #abrir-buscador kbd, .texto-boton { display: none; }
-  .marca strong { font-size: 13px; }
-  #abrir-buscador { flex: none; width: 44px; margin-left: auto; justify-content: center; padding: 0; }
-  .barra-acciones { margin-left: 0; }
+  /* Seis botones y el título no caben en una línea: botones más compactos y título en dos líneas */
+  .marca { flex: 1; gap: 8px; }
+  .marca img { width: 30px; height: 30px; flex: none; }
+  .marca > div { min-width: 0; }
+  .marca strong { font-size: 11px; line-height: 1.15; letter-spacing: 0.02em; white-space: normal; }
+  .boton-icono { height: 36px; min-width: 36px; padding: 0 7px; }
+  #abrir-buscador { flex: none; width: 36px; height: 36px; margin-left: 0; justify-content: center; padding: 0; }
+  .barra-acciones { margin-left: 0; gap: 3px; }
   #kpis { top: 74px; left: 0; right: 0; display: flex; overflow-x: auto; padding: 0 10px 4px; scrollbar-width: none; }
   .kpi { flex: none; padding: 8px 12px; }
   .kpi .valor { font-size: 18px; }
@@ -242,6 +247,10 @@ button.tarjeta:hover { border-color: var(--borde); }
   .asa::before { content: ""; position: absolute; left: 50%; top: 9px; width: 42px; height: 4px; margin-left: -21px; border-radius: 2px; background: rgba(147, 190, 255, 0.4); }
   .pestanas { padding-top: 0; }
   .maplibregl-ctrl-bottom-right { right: 0; bottom: 132px; }
+}
+@media (max-width: 380px) {
+  /* Sin espacio para el título: queda el logo y el nombre sigue disponible para lectores de pantalla */
+  .marca strong { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
