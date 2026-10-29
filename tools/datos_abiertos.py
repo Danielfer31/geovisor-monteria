@@ -5,6 +5,7 @@ Uso (desde la raíz del repositorio, con acceso a www.datos.gov.co y api.us.socr
     python3 tools/datos_abiertos.py descargar    # baja los conjuntos de CONJUNTOS filtrados a Montería
     python3 tools/datos_abiertos.py cvs          # baja capas ambientales del geoportal de la CVS (ArcGIS)
     python3 tools/datos_abiertos.py pot          # baja centros poblados del POT y el límite municipal (ArcGIS)
+    python3 tools/datos_abiertos.py vias         # red vial nacional, peajes, concesiones ANI y conexiones de Montería
 
 Escribe en fuentes_abiertas/ (crudo, para revisar) y no toca data/: la integración al visor
 se hace después de revisar columnas y cobertura de cada conjunto.
@@ -58,6 +59,30 @@ POT_CAPAS = {
     "pot_centros_poblados": (14, "1=1", 0.00005),
     "pot_limite_municipal": (30, "MpCodigo='23001'", 0.0005),
 }
+
+# Red vial nacional y conexiones. INVÍAS publica en datos.gov.co la misma capa de su geoportal
+# (hermes2.invias.gov.co/server/rest/services/MapaCarreteras/RedVial), con licencia CC BY-SA 4.0.
+# Se baja completa (715 tramos) para medir distancias por la red hasta cualquier cabecera del país.
+VIAS_CONJUNTOS = {
+    # A precisión completa son 258 MB; simplificada a ~3 m en el servidor la longitud cambia 0,1 % (mediana)
+    "invias_red_vial": ("ie7y-asdn", "geojson", {"$select": "codigo_tramo, ruta, nombre_ruta, sector, nombre_tramo, administrador, "
+                        "categoria, superficie, calzada, territorial, fuente, poste_de_referencia_inicial, distancia_inicial, "
+                        "poste_de_referencia_final, distancia_final, shape__length, simplify_preserve_topology(multiline, 0.00003) as multiline"}),
+    "invias_peajes": ("68qj-5xux", "json", {}),
+    # Coordenadas de las cabeceras municipales: punto de partida y llegada de las distancias por carretera
+    "dane_divipola_municipios": ("gdxc-w37w", "json", {}),
+}
+# Último año completo en los registros de despachos (SuperTransporte) y de pasajeros aéreos (Aerocivil)
+ANIO_CONEXIONES = 2025
+TERMINAL = "T.T. DE MONTERÍA"
+AEROPUERTO = "MTR"  # código IATA de Los Garzones
+# Geoportal de datos abiertos de la ANI (ArcGIS Online, usuario AdminANI)
+ANI_SERVICIO = "https://services8.arcgis.com/qXzQm8c8qEBxS81s/arcgis/rest/services/OpenDataAni/FeatureServer"
+# Capa y su ítem en ArcGIS Online: el ítem de cada capa declara las condiciones de uso; el del servicio no
+ANI_CAPAS = {"ani_concesiones_carreteras": (3, "b29447e238b74f69954fcc3513178993"),
+             "ani_concesiones_aeroportuarias": (2, "27d4d5f324b44768a72390c7be87e4b3")}
+# Montería y los municipios vecinos: lo que alcanza a verse en el visor
+REGION_ENVOLVENTE = "-76.7,7.9,-75.0,9.5"
 
 # En orden de preferencia: en el REPS, municipiosede es el código DANE y municipiosededesc el nombre.
 COLUMNAS_MUNICIPIO = ("municipiosededesc", "nombremunicipio", "municipio", "nombre_municipio", "municipio_sede", "nommunicipio", "mpio")
@@ -165,5 +190,59 @@ def pot():
         print(f"{nombre}: {len(geo.get('features', []))} polígonos → {ruta.relative_to(RAIZ)}")
 
 
+def socrata(ident, formato="json", params=None):
+    meta = pedir(f"https://{DOMINIO}/api/views/{ident}.json")
+    url = f"https://{DOMINIO}/resource/{ident}.{formato}?" + urllib.parse.urlencode({"$limit": 50000, **(params or {})})
+    return {"id": ident, "titulo": meta.get("name"), "entidad": meta.get("attribution"),
+            "licencia": (meta.get("license") or {}).get("name"), "actualizado": meta.get("rowsUpdatedAt")}, pedir(url)
+
+
+def vias():
+    SALIDA.mkdir(exist_ok=True)
+    for nombre, (ident, formato, params) in VIAS_CONJUNTOS.items():
+        fuente, datos = socrata(ident, formato, params)
+        ruta = SALIDA / f"{nombre}.{formato}"
+        if formato == "geojson":
+            datos["fuente"] = fuente
+        else:
+            datos = {**fuente, "filas": datos}
+        ruta.write_text(json.dumps(datos, ensure_ascii=False), encoding="utf-8")
+        print(f"{nombre} ({ident}): {len(datos.get('features', datos.get('filas', [])))} registros → {ruta.relative_to(RAIZ)}")
+
+    # Destinos servidos desde la terminal de Montería y desde Los Garzones, sumados en el año
+    desde, hasta = f"{ANIO_CONEXIONES}-01-01T00:00:00", f"{ANIO_CONEXIONES}-12-31T23:59:59"
+    consultas = {
+        "supertransporte_terminal_monteria": ("eh75-8ah6", {
+            "$select": "municipio_destino_ruta, sum(despachos) as despachos, sum(pasajeros) as pasajeros",
+            "$where": f"terminal = '{TERMINAL}' AND municipio_origen_ruta = '23001' AND fecha_despacho between '{desde}' and '{hasta}'",
+            "$group": "municipio_destino_ruta", "$order": "despachos DESC"}),
+        "aerocivil_origen_destino_monteria": ("gb6w-ynu4", {
+            "$select": "destino, ciudad_destino, pais_destino, sum(pasajeros) as pasajeros",
+            "$where": f"origen = '{AEROPUERTO}' AND a_o = '{ANIO_CONEXIONES}'",
+            "$group": "destino, ciudad_destino, pais_destino", "$order": "pasajeros DESC"}),
+    }
+    for nombre, (ident, params) in consultas.items():
+        fuente, filas = socrata(ident, "json", params)
+        ruta = SALIDA / f"{nombre}.json"
+        ruta.write_text(json.dumps({**fuente, "anio": ANIO_CONEXIONES, "consulta": params, "filas": filas}, ensure_ascii=False), encoding="utf-8")
+        print(f"{nombre} ({ident}): {len(filas)} destinos en {ANIO_CONEXIONES} → {ruta.relative_to(RAIZ)}")
+
+    for nombre, (capa, item_id) in ANI_CAPAS.items():
+        url = f"{ANI_SERVICIO}/{capa}"
+        meta = pedir(url + "?f=json")
+        item = pedir(f"https://www.arcgis.com/sharing/rest/content/items/{item_id}?f=json")
+        consulta = urllib.parse.urlencode({
+            "where": "1=1", "geometry": REGION_ENVOLVENTE, "geometryType": "esriGeometryEnvelope", "inSR": 4326,
+            "spatialRel": "esriSpatialRelIntersects", "outFields": "*", "outSR": 4326, "f": "geojson",
+            "maxAllowableOffset": 0.0005, "geometryPrecision": 5,
+        })
+        geo = pedir(f"{url}/query?{consulta}")
+        geo["fuente"] = {"servicio": url, "titulo": meta.get("name"), "editado": (meta.get("editingInfo") or {}).get("lastEditDate"),
+                         "item": item_id, "licencia": item.get("licenseInfo"), "credito": item.get("accessInformation")}
+        ruta = SALIDA / f"{nombre}.geojson"
+        ruta.write_text(json.dumps(geo, ensure_ascii=False), encoding="utf-8")
+        print(f"{nombre}: {len(geo.get('features', []))} elementos en la región → {ruta.relative_to(RAIZ)}")
+
+
 if __name__ == "__main__":
-    {"catalogo": catalogo, "descargar": descargar, "cvs": cvs, "pot": pot}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: print(__doc__))()
+    {"catalogo": catalogo, "descargar": descargar, "cvs": cvs, "pot": pot, "vias": vias}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: print(__doc__))()
