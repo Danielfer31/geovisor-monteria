@@ -388,4 +388,6 @@ body.limpio .salir-limpio {
 }
 .enlaces-popup { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .enlaces-popup a { font-weight: 600; }
-.enlaces-popup .falta { margin: 0 0 4px; color: #C4D1E6; font-size: 11px; }
+.enlaces-popup .falta, .maplibregl-popup-content .falta { margin: 6px 0 4px; color: #C4D1E6; font-size: 11px; }
+.lista-sedes { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+.capas .chip i.aro { background: transparent; border: 2px solid; box-sizing: border-box; }

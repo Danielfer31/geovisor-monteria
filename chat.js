@@ -188,7 +188,7 @@
     if (c) return resumenComuna(c);
     if (b) return resumenBarrio(b, m);
     if (tiene(q, ["fuente", "dato", "de donde", "confiable", "oficial"])) {
-      return { texto: "Uso: **Censo DANE 2018** por manzana; **OpenStreetMap** para comunas, barrios, equipamientos y coberturas ambientales (no oficiales); **Instagram de la Alcaldía** para obras comunicadas, y **SECOP I y II** para la contratación. Las distancias son en línea recta.", fuente: "Fuentes del visor", accion: function () { G.fuentes(); } };
+      return { texto: "Uso: **Censo DANE 2018** por manzana; **OpenStreetMap** para comunas, barrios, equipamientos y coberturas ambientales (no oficiales); **Instagram de la Alcaldía** para obras comunicadas; **SECOP I y II** para la contratación, y como capas oficiales las **sedes educativas de MinEducación** (ubicación aproximada) y los **humedales y áreas protegidas de la CVS**. Las distancias son en línea recta.", fuente: "Fuentes del visor", accion: function () { G.fuentes(); } };
     }
     if (m || tiene(q, ["monteria", "ciudad", "general", "resumen"])) {
       var mu = G.datos.resumen.resumen.municipio;

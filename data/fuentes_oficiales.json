@@ -1,0 +1,72 @@
+{
+ "generado": "2026-10-29",
+ "fuentes": [
+  {
+   "id": "x5ay-984n",
+   "nombre": "MinEducación · Sedes educativas de preescolar, básica y media (año 2019)",
+   "entidad": "Ministerio de Educación Nacional",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2021-03-19",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/x5ay-984n",
+   "uso": "328 sedes de Montería con coordenadas; 74 coinciden por nombre con OSM y 254 se muestran como capa oficial. Coordenadas con 2 decimales: ubicación aproximada (±0,8 km)"
+  },
+  {
+   "id": "c36g-9fc2",
+   "nombre": "MinSalud · Registro Especial de Prestadores y Sedes de Servicios de Salud (REPS)",
+   "entidad": "Ministerio de Salud y Protección Social",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2026-04-17",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/c36g-9fc2",
+   "uso": "Revisado: 784 sedes en Montería sin coordenadas; no se integra al mapa"
+  },
+  {
+   "id": "areas_PMA_CVS",
+   "nombre": "CVS · Ciénagas y humedales con plan de manejo ambiental",
+   "entidad": "Corporación Autónoma Regional de los Valles del Sinú y San Jorge (CVS)",
+   "licencia": "Uso permitido citando a la CVS como autora (restricciones de uso del geoportal); geometrías simplificadas a ~20 m para el visor",
+   "actualizado": "2026-09-05",
+   "descargado": "2026-10-29",
+   "url": "https://inicio-sigcvs.hub.arcgis.com",
+   "uso": "5 polígonos alrededor de Montería · lente Ambiente"
+  },
+  {
+   "id": "Areas_Protegidas_RUNAP",
+   "nombre": "CVS · Áreas protegidas inscritas en el RUNAP",
+   "entidad": "CVS, con información del RUNAP (Parques Nacionales Naturales)",
+   "licencia": "Uso permitido citando a la CVS como autora (restricciones de uso del geoportal); geometrías simplificadas a ~20 m para el visor",
+   "actualizado": "2026-09-05",
+   "descargado": "2026-10-29",
+   "url": "https://inicio-sigcvs.hub.arcgis.com",
+   "uso": "2 polígonos alrededor de Montería · lente Ambiente"
+  }
+ ],
+ "no_disponibles": [
+  "Alcaldía de Montería · Geoposicionamiento de instituciones educativas (ew4g-9n55) y Zonas Wifi (qyrr-zx9j): enlazados desde monteria.gov.co, pero datos.gov.co responde que ya no existen",
+  "MinTIC · Zonas Digitales Urbanas (wg2u-d8ji): sin coordenadas y sin filas para Montería",
+  "CVS · rondas hídricas: el geoportal no las publica como capa descargable"
+ ],
+ "cruce_sin_nombre": {
+  "umbral_m": 75,
+  "sin_nombre": 160,
+  "resueltos": 0,
+  "dudosos": 0,
+  "por_fuente": [
+   {
+    "fuente": "MinEducación",
+    "categoria": "educacion",
+    "candidatos_osm": 7,
+    "resueltos": 0,
+    "motivo": "coordenadas publicadas con 2 decimales: error de hasta 787 m, mayor que el umbral de 75 m; no permite saber a qué predio corresponde"
+   },
+   {
+    "fuente": "REPS (MinSalud)",
+    "categoria": "salud",
+    "candidatos_osm": 6,
+    "resueltos": 0,
+    "motivo": "784 sedes en Montería, solo con dirección: el REPS no publica coordenadas"
+   }
+  ]
+ }
+}

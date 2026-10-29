@@ -151,6 +151,12 @@
     verde: { color: "#1C4A2E", borde: "#86EFAC", nombre: "Parques y zonas verdes" }
   };
   var CAPAS_ECO = ["eco-agua", "eco-humedal", "eco-bosque", "eco-verde"];
+  // Capas de fuentes oficiales: borde continuo y aro hueco para distinguirlas de lo que viene de OSM
+  var OFICIAL = {
+    humedal_pma: { color: "#2DD4BF", nombre: "Humedal con plan de manejo · CVS" },
+    area_protegida: { color: "#A3E635", nombre: "Área protegida RUNAP · CVS" },
+    sedes: "#4FC3F7"
+  };
   function estiloBase() {
     return {
       version: 8,
@@ -192,6 +198,7 @@
     mapa.setPaintProperty("equipamientos", "circle-radius", estado.categoria
       ? ["interpolate", ["linear"], ["zoom"], 11, 4, 16, 9] : ["interpolate", ["linear"], ["zoom"], 12, 2.5, 16, 6]);
     if (estado.categoria) mapa.setLayerZoomRange("equipamientos", 0, 24); else mapa.setLayerZoomRange("equipamientos", 13, 24);
+    mapa.setFilter("oficial-sedes", estado.categoria && estado.categoria !== "educacion" ? ["==", ["get", "n"], -1] : null);
     document.querySelectorAll("[data-categoria]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.categoria === estado.categoria ? "true" : "false"); });
   }
   function capasBase() {
@@ -266,6 +273,8 @@
     mapa.addSource("manzanas", { type: "geojson", data: datos.manzanas, promoteId: "cod_dane" });
     mapa.addSource("equipamientos", { type: "geojson", data: datos.equipamientos });
     mapa.addSource("obras", { type: "geojson", data: datos.obras });
+    mapa.addSource("oficial-ambiente", { type: "geojson", data: datos.oficialAmbiente });
+    mapa.addSource("oficial-sedes", { type: "geojson", data: datos.oficialSedes });
 
     mapa.addLayer({ id: "perimetro-brillo", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 8, "line-blur": 8, "line-opacity": 0.35 } });
     mapa.addLayer({ id: "perimetro", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 1.2, "line-opacity": 0.8 } });
@@ -280,6 +289,12 @@
     mapa.addLayer({ id: "comunas", type: "line", source: "comunas",
       paint: { "line-color": ["case", ["boolean", ["feature-state", "sel"], false], COLORES.ambar, COLORES.blanco],
         "line-width": ["case", ["boolean", ["feature-state", "sel"], false], 2.5, 1.2], "line-opacity": 0.7 } });
+    var colorOficial = ["match", ["get", "capa"], "area_protegida", OFICIAL.area_protegida.color, OFICIAL.humedal_pma.color];
+    var visAmbiente = lenteActual().campo ? "none" : "visible";
+    mapa.addLayer({ id: "oficial-ambiente", type: "fill", source: "oficial-ambiente", layout: { visibility: visAmbiente },
+      paint: { "fill-color": colorOficial, "fill-opacity": 0.16 } });
+    mapa.addLayer({ id: "oficial-ambiente-borde", type: "line", source: "oficial-ambiente", layout: { visibility: visAmbiente },
+      paint: { "line-color": colorOficial, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 15, 2.6], "line-opacity": 0.95 } });
     mapa.addLayer({
       id: "manzanas", type: "fill-extrusion", source: "manzanas",
       paint: {
@@ -292,6 +307,10 @@
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.5, 16, 6],
       "circle-color": ["match", ["get", "categoria"]].concat(Object.keys(COLOR_CATEGORIA).reduce(function (a, k) { return a.concat([k, COLOR_CATEGORIA[k]]); }, []), ["#93A6C4"]),
       "circle-stroke-color": "#000B22", "circle-stroke-width": 1, "circle-opacity": 0.9
+    } });
+    mapa.addLayer({ id: "oficial-sedes", type: "circle", source: "oficial-sedes", minzoom: 12, paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, ["+", 3, ["min", ["get", "n"], 5]], 16, ["+", 7, ["min", ["get", "n"], 8]]],
+      "circle-color": "rgba(0, 26, 79, 0.45)", "circle-stroke-color": OFICIAL.sedes, "circle-stroke-width": 2
     } });
     mapa.addLayer({ id: "obras-halo", type: "circle", source: "obras", paint: { "circle-radius": 14, "circle-color": COLORES.ambar, "circle-opacity": 0.25, "circle-blur": 0.6 } });
     mapa.addLayer({ id: "obras", type: "circle", source: "obras", paint: { "circle-radius": 6, "circle-color": COLORES.ambar, "circle-stroke-color": COLORES.navy, "circle-stroke-width": 2 } });
@@ -310,10 +329,10 @@
     mapa.on("click", function (e) { if (clicSimulador(e)) e.preventDefault(); });
     mapa.on("click", "manzanas", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes"] }).length) return;
       seleccionarManzana(e.features[0].properties);
     });
-    ["obras", "equipamientos"].forEach(function (capa) {
+    ["obras", "equipamientos", "oficial-sedes"].forEach(function (capa) {
       mapa.on("mouseenter", capa, function () { mapa.getCanvas().style.cursor = "pointer"; });
       mapa.on("mouseleave", capa, function () { mapa.getCanvas().style.cursor = ""; });
     });
@@ -321,6 +340,10 @@
     mapa.on("click", "equipamientos", function (e) {
       if (estado.simulando) return;
       popup(e.features[0].geometry.coordinates, fichaEquipamiento(e.features[0]));
+    });
+    mapa.on("click", "oficial-sedes", function (e) {
+      if (estado.simulando || mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos"] }).length) return;
+      popup(e.features[0].geometry.coordinates, fichaSedesOficiales(e.features[0]));
     });
 
     montarBase("perimetro-brillo");
@@ -399,7 +422,7 @@
     var tip = $("#tooltip"), escritorio = window.matchMedia("(hover: hover)").matches;
     mapa.on("mousemove", function (e) {
       if (!escritorio) return;
-      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "manzanas"].concat(CAPAS_ECO) })[0];
+      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "manzanas", "oficial-ambiente"].concat(CAPAS_ECO) })[0];
       if (!f) { tip.hidden = true; return; }
       var html;
       if (f.layer.id === "manzanas") {
@@ -410,6 +433,10 @@
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>Obra comunicada · clic para ver</span>";
       } else if (f.layer.id === "equipamientos") {
         html = "<b>" + escapar(nombreEquipamiento(f.properties)) + "</b><span>" + escapar(CATEGORIAS[f.properties.categoria] || "") + (f.properties.nombre ? "" : " · falta el nombre en OSM") + "</span>";
+      } else if (f.layer.id === "oficial-sedes") {
+        html = "<b>" + (f.properties.n > 1 ? num(f.properties.n) + " sedes educativas" : "Sede educativa") + "</b><span>MinEducación · ubicación aproximada · clic para ver</span>";
+      } else if (f.layer.id === "oficial-ambiente") {
+        html = "<b>" + escapar(f.properties.nombre) + "</b><span>" + escapar(OFICIAL[f.properties.capa].nombre) + "</span>";
       } else {
         var eco = ECO[f.layer.id.replace("eco-", "")];
         html = "<b>" + escapar(f.properties.name || eco.nombre) + "</b><span>" + escapar(eco.nombre) + " · OSM</span>";
@@ -432,7 +459,9 @@
 
     mapa.on("click", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "manzanas"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "manzanas"] }).length) return;
+      var o = mapa.queryRenderedFeatures(e.point, { layers: ["oficial-ambiente"] })[0];
+      if (o) { popup(e.lngLat, fichaAmbienteOficial(o)); return; }
       var f = mapa.queryRenderedFeatures(e.point, { layers: CAPAS_ECO })[0];
       if (!f) return;
       var eco = ECO[f.layer.id.replace("eco-", "")];
@@ -483,6 +512,7 @@
       mapa.setPaintProperty("eco-bosque", "fill-opacity", l.campo ? 0.55 : 0.85);
       mapa.setPaintProperty("eco-verde", "fill-opacity", l.campo ? 0.35 : 0.7);
       mapa.setPaintProperty("eco-humedal", "fill-opacity", l.campo ? 0.7 : 0.95);
+      ["oficial-ambiente", "oficial-ambiente-borde"].forEach(function (c) { mapa.setLayoutProperty(c, "visibility", l.campo ? "none" : "visible"); });
     }
     $("#leyenda-titulo").textContent = l.titulo;
     $("#leyenda-eco").hidden = !!l.campo;
@@ -542,7 +572,7 @@
       b.addEventListener("click", function () {
         var on = b.getAttribute("aria-pressed") !== "true";
         b.setAttribute("aria-pressed", on ? "true" : "false");
-        var capas = { equipamientos: ["equipamientos"], obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
+        var capas = { equipamientos: ["equipamientos"], sedes: ["oficial-sedes"], obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
         capas.forEach(function (c) { mapa.setLayoutProperty(c, "visibility", on ? "visible" : "none"); });
       });
     });
@@ -585,6 +615,25 @@
         f.url ? el("a", { href: f.url, target: "_blank", rel: "noopener noreferrer", texto: "origen" }) : null
       ]));
     });
+    var o = datos.oficiales;
+    (o.fuentes || []).forEach(function (f) {
+      ul.appendChild(el("li", {}, [
+        el("b", { texto: f.nombre }), el("br"),
+        el("span", { class: "fuente", texto: f.licencia + " · actualizado " + (f.actualizado || "s. f.") + " · descargado " + f.descargado + " · " }),
+        el("a", { href: f.url, target: "_blank", rel: "noopener noreferrer", texto: "origen" }), el("br"),
+        el("span", { class: "fuente", texto: f.uso })
+      ]));
+    });
+    var c = o.cruce_sin_nombre;
+    if (c) ul.appendChild(el("li", {}, [
+      el("b", { texto: "Nombres para lugares sin nombre en OSM" }), el("br"),
+      el("span", { class: "fuente", texto: num(c.resueltos) + " de " + num(c.sin_nombre) + " resueltos con fuentes oficiales (cercanía menor a " + c.umbral_m + " m y misma categoría). " +
+        c.por_fuente.map(function (x) { return x.fuente + ": " + x.motivo; }).join(". ") + "." })
+    ]));
+    if ((o.no_disponibles || []).length) ul.appendChild(el("li", {}, [
+      el("b", { texto: "Revisadas y no integradas" }), el("br"),
+      el("span", { class: "fuente", texto: o.no_disponibles.join(". ") + "." })
+    ]));
     $("#corte").textContent = "Corte · " + new Date((datos.resumen.secop.corte || "2026-09-22") + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
   }
 
@@ -953,7 +1002,8 @@
   // (sus términos lo prohíben) y los nombres se corrigen en OSM con conocimiento local.
   function fichaEquipamiento(f) {
     var p = f.properties, c = f.geometry.coordinates;
-    var html = "<b>" + escapar(nombreEquipamiento(p)) + "</b><br><span style='color:#93A6C4'>" + escapar(CATEGORIAS[p.categoria] || p.categoria) + " · OpenStreetMap</span>";
+    var html = "<b>" + escapar(nombreEquipamiento(p)) + "</b><br><span style='color:#93A6C4'>" + escapar(CATEGORIAS[p.categoria] || p.categoria) + " · OpenStreetMap" +
+      (p.nombre_fuente ? " · nombre según " + escapar(p.nombre_fuente) : "") + "</span>";
     var osm = p.osm_id ? "https://www.openstreetmap.org/" + escapar(p.osm_tipo || "node") + "/" + escapar(p.osm_id) : null;
     html += "<div class='enlaces-popup'>";
     if (!p.nombre) html += "<p class='falta'>Este lugar no tiene nombre en OpenStreetMap. Si lo conoce, puede agregarlo con su conocimiento local.</p>";
@@ -961,6 +1011,25 @@
     html += "<a href='https://www.google.com/maps/search/?api=1&query=" + c[1] + "," + c[0] + "' target='_blank' rel='noopener noreferrer'>Abrir en Google Maps</a>";
     html += "</div>";
     return html;
+  }
+
+  // MapLibre entrega las propiedades anidadas como texto JSON
+  function fichaSedesOficiales(f) {
+    var p = f.properties, sedes = typeof p.sedes === "string" ? JSON.parse(p.sedes) : p.sedes;
+    var html = "<b>" + (sedes.length > 1 ? num(sedes.length) + " sedes educativas" : escapar(sedes[0].sede)) + "</b><br>" +
+      "<span style='color:" + OFICIAL.sedes + "'>Capa oficial · MinEducación (2019)</span>" +
+      "<p class='falta'>Ubicación aproximada: la fuente publica las coordenadas con dos decimales (hasta ~0,8 km de diferencia). No se encontraron por nombre en OpenStreetMap.</p><ul class='lista-sedes'>";
+    sedes.slice(0, 8).forEach(function (s) {
+      html += "<li><b>" + escapar(s.sede) + "</b>" + (s.establecimiento && s.establecimiento !== s.sede ? "<br>" + escapar(s.establecimiento) : "") +
+        "<br><span style='color:#93A6C4'>" + escapar(s.sector) + " · " + escapar(s.zona) + (s.matricula != null ? " · " + num(s.matricula) + " estudiantes" : "") + "</span></li>";
+    });
+    if (sedes.length > 8) html += "<li style='color:#93A6C4'>y " + num(sedes.length - 8) + " más</li>";
+    return html + "</ul>";
+  }
+  function fichaAmbienteOficial(f) {
+    var p = f.properties, capa = OFICIAL[p.capa];
+    return "<b>" + escapar(p.nombre) + "</b><br><span style='color:" + capa.color + "'>" + escapar(capa.nombre) + "</span><br>" +
+      "<span style='color:#93A6C4'>" + escapar(p.detalle) + "</span><br><span style='color:#93A6C4'>Capa oficial · geoportal SIG-CVS</span>";
   }
 
   // ---------- Vista limpia: solo el mapa ----------
@@ -1416,11 +1485,17 @@
   }
 
   // ---------- Arranque ----------
+  // Las capas oficiales son opcionales: si faltan, el visor sigue con las fuentes base
+  var VACIA = { type: "FeatureCollection", features: [] };
+  function opcional(ruta, defecto) { return cargar(ruta).catch(function () { return defecto; }); }
   Promise.all([
     cargar("data/contexto.json"), cargar("data/manzanas.geojson"), cargar("data/equipamientos.geojson"),
-    cargar("data/obras.geojson"), cargar("data/resumen.json")
+    cargar("data/obras.geojson"), cargar("data/resumen.json"),
+    opcional("data/fuentes_oficiales.json", {}), opcional("data/oficial_sedes_educativas.geojson", VACIA),
+    opcional("data/oficial_ambiente.geojson", VACIA)
   ]).then(function (r) {
-    datos = { contexto: r[0], manzanas: r[1], equipamientos: r[2], obras: r[3], resumen: r[4] };
+    datos = { contexto: r[0], manzanas: r[1], equipamientos: r[2], obras: r[3], resumen: r[4],
+      oficiales: r[5], oficialSedes: r[6], oficialAmbiente: r[7] };
     calcularIndice();
     calcularCortes();
     pintarKpis(); pintarLentes(); enlazarControles(); pintarFuentes();
