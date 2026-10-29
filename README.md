@@ -15,6 +15,7 @@ Geovisor urbano de Montería con la identidad de ColombIA · CIIAC (Centro Insti
 - **Capas oficiales** (se distinguen de OSM por el borde continuo o el aro hueco):
   - *Sedes educativas MinEducación* que no aparecen por nombre en OpenStreetMap (254 sedes en 191 puntos). La fuente publica las coordenadas con dos decimales, así que la ubicación es aproximada (hasta ~0,8 km).
   - *Humedales con plan de manejo* (5) y *áreas protegidas RUNAP* (2) del geoportal de la CVS, en el lente Ambiente.
+- **Zona rural**: los 28 corregimientos con sus 63 centros poblados (cabeceras y caseríos) delimitados en el POT y el límite municipal. Se recorren desde el panel (*Ver todo el municipio* y una ficha por corregimiento), el buscador o el mapa. No hay límites oficiales publicados de cada corregimiento, así que se muestran sus centros poblados; los datos por manzana del Censo solo cubren la cabecera.
 - **Herramientas de trabajo**: ficha PDF de ciudad o comuna (imprimir → guardar como PDF), descarga CSV de comunas, equipamientos y proyectos SECOP, y enlace que conserva la vista exacta para compartir.
 - **Índice de necesidad** (lente «Prioridad»): combina carencias de servicios, distancia a salud, educación y seguridad y estrato, con pesos ajustables y perfiles predefinidos; ranking de comunas ponderado por población, manzanas con mayor necesidad y descarga CSV. Es un índice relativo, no una medida oficial.
 - **Simulador de inversión**: estima cuántas personas ganarían acceso a salud, educación o seguridad con un nuevo equipamiento en el punto elegido, y sugiere los tres mejores sitios.
@@ -35,7 +36,7 @@ Las fuentes, licencias y límites de interpretación están en el botón **Fuent
 | `v1/index.html` | Instantánea publicada de la v1.0, fuente de los datos |
 | `tools/extraer_datos.py` | Regenera `data/` a partir de `v1/index.html` |
 | `tools/datos_abiertos.py` | Consulta el catálogo de datos.gov.co y descarga los conjuntos y capas de la CVS a `fuentes_abiertas/` (fuera de git) |
-| `tools/integrar_oficiales.py` | Cruza esas fuentes con los equipamientos OSM y escribe `data/oficial_*.geojson` y `data/fuentes_oficiales.json` |
+| `tools/integrar_oficiales.py` | Cruza esas fuentes con los equipamientos OSM y escribe `data/oficial_*.geojson`, `data/corregimientos.geojson` y `data/fuentes_oficiales.json` |
 
 Para regenerar los datos tras exportar una nueva instantánea en `v1/index.html`:
 
@@ -43,12 +44,13 @@ Para regenerar los datos tras exportar una nueva instantánea en `v1/index.html`
 python3 tools/extraer_datos.py
 ```
 
-Para actualizar las capas oficiales (requiere acceso a www.datos.gov.co, api.us.socrata.com y services3.arcgis.com):
+Para actualizar las capas oficiales (requiere acceso a www.datos.gov.co, api.us.socrata.com, services.arcgis.com y services3.arcgis.com):
 
 ```bash
 python3 tools/datos_abiertos.py catalogo    # lista conjuntos de entidades de Montería, Córdoba y la CVS
 python3 tools/datos_abiertos.py descargar   # REPS, establecimientos y sedes educativas filtrados a Montería
 python3 tools/datos_abiertos.py cvs         # humedales con PMA y áreas protegidas RUNAP
+python3 tools/datos_abiertos.py pot         # centros poblados del POT y límite municipal
 python3 tools/integrar_oficiales.py         # cruce con OSM y archivos de data/
 ```
 
@@ -58,6 +60,7 @@ python3 tools/integrar_oficiales.py         # cruce con OSM y archivos de data/
 |---|---|---|
 | [MinEducación · Sedes educativas (x5ay-984n)](https://www.datos.gov.co/d/x5ay-984n), año 2019 | CC BY-SA 4.0 | Capa de sedes que no están en OSM; ubicación aproximada |
 | [MinSalud · REPS (c36g-9fc2)](https://www.datos.gov.co/d/c36g-9fc2), corte marzo 2026 | CC BY-SA 4.0 | Revisado; 784 sedes en Montería sin coordenadas, no se integra |
+| [POT de Montería · centros poblados y límite municipal](https://www.arcgis.com/home/item.html?id=2536664f628c4b42b3422f894b053252) (Acuerdo 003 de 2021) | Sin licencia declarada; capas entregadas por la Alcaldía y publicadas por el proyecto APPA Córdoba | Corregimientos y centros poblados; el límite municipal no sirve para ubicar puntos exactos ni calcular áreas |
 | [CVS · geoportal SIG-CVS](https://inicio-sigcvs.hub.arcgis.com): `areas_PMA_CVS` y `Areas_Protegidas_RUNAP` | Uso con crédito a la CVS (restricciones de uso del geoportal) | Lente Ambiente; geometrías simplificadas a ~20 m |
 
 **Nombres para equipamientos sin nombre en OSM**: 0 de 160 resueltos. El cruce exige un punto oficial de la misma categoría a menos de 75 m; las coordenadas de MinEducación tienen hasta ~790 m de error por redondeo y el REPS no publica coordenadas, así que ninguna coincidencia es confiable. Los nombres no se toman de Google Maps porque sus términos lo prohíben.
@@ -66,4 +69,4 @@ python3 tools/integrar_oficiales.py         # cruce con OSM y archivos de data/
 
 Para verlo localmente, sirva la carpeta con cualquier servidor estático (por ejemplo `python3 -m http.server`) y abra `http://localhost:8000`. El mapa base se carga desde CARTO y OpenStreetMap, por lo que requiere conexión a internet.
 
-Atribución: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL), © [CARTO](https://carto.com/attributions), DANE, Ministerio de Educación Nacional (CC BY-SA 4.0), Corporación Autónoma Regional de los Valles del Sinú y San Jorge (CVS).
+Atribución: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL), © [CARTO](https://carto.com/attributions), DANE, Ministerio de Educación Nacional (CC BY-SA 4.0), Corporación Autónoma Regional de los Valles del Sinú y San Jorge (CVS), Alcaldía de Montería (POT).

@@ -6,6 +6,7 @@ Uso (desde la raíz, después de `datos_abiertos.py descargar` y `datos_abiertos
 Lee fuentes_abiertas/ (crudo, fuera del repositorio) y escribe:
     data/oficial_sedes_educativas.geojson  sedes MinEducación que no aparecen en OSM
     data/oficial_ambiente.geojson          humedales con PMA y áreas protegidas RUNAP de la CVS
+    data/corregimientos.geojson            límite municipal y centros poblados del POT por corregimiento
     data/fuentes_oficiales.json            procedencia, licencias y resultado del cruce
 
 Nombres para los equipamientos OSM sin nombre: solo se asignan si una fuente oficial de la misma
@@ -75,6 +76,69 @@ def fecha(ts):
         return None
     ts = ts / 1000 if ts > 1e11 else ts
     return datetime.fromtimestamp(ts, timezone.utc).date().isoformat()
+
+
+# El POT escribe el mismo corregimiento como «GARZONES» y «LOS GARZONES»
+UNIFICAR_CORREGIMIENTO = {"GARZONES": "LOS GARZONES"}
+MINUSCULAS = {"de", "del", "la", "las", "los", "el", "y"}
+
+
+def titulo(t):
+    return " ".join(w.lower() if i and w.lower() in MINUSCULAS else w.capitalize() for i, w in enumerate(t.split()))
+
+
+def centroide(geom):
+    """Centroide por área del anillo exterior más grande (los centros poblados son polígonos simples)."""
+    anillos = [p[0] for p in geom["coordinates"]] if geom["type"] == "MultiPolygon" else [geom["coordinates"][0]]
+    def area_y_centro(r):
+        a = cx = cy = 0.0
+        for (x0, y0), (x1, y1) in zip(r, r[1:]):
+            k = x0 * y1 - x1 * y0
+            a += k; cx += (x0 + x1) * k; cy += (y0 + y1) * k
+        return a / 2, (cx / (3 * a), cy / (3 * a)) if a else r[0]
+    a, c = max((area_y_centro(r) for r in anillos), key=lambda t: abs(t[0]))
+    return [round(c[0], 5), round(c[1], 5)]
+
+
+def corregimientos(hoy):
+    centros = leer("pot_centros_poblados.geojson")
+    limite = leer("pot_limite_municipal.geojson")
+    lim = limite["features"][0]
+    feats = [{"type": "Feature", "geometry": lim["geometry"], "properties": {
+        "capa": "limite", "nombre": lim["properties"]["MpNombre"], "norma": lim["properties"]["MpNorma"]}}]
+    grupos = {}
+    for f in centros["features"]:
+        a = f["properties"]
+        clave = UNIFICAR_CORREGIMIENTO.get(a["CORREGIMIE"].strip(), a["CORREGIMIE"].strip())
+        nombre = a["NOMBRE"].strip()
+        cabecera = nombre.startswith("Cgto ")
+        p = {"capa": "centro", "nombre": re.sub(r"^(Cgto|Caserio) ", "", nombre),
+             "tipo": "Cabecera de corregimiento" if cabecera else "Caserío", "jerarquia": a["Jerarquia"],
+             "hectareas": a["hectareas"], "corregimiento": titulo(clave)}
+        feats.append({"type": "Feature", "geometry": f["geometry"], "properties": p})
+        grupos.setdefault(clave, []).append((p, centroide(f["geometry"])))
+    for clave, ms in sorted(grupos.items()):
+        orden = {"Principal": 0, "Intermedio": 1, "Secundario": 2}
+        ms.sort(key=lambda m: (m[0]["tipo"] != "Cabecera de corregimiento", orden.get(m[0]["jerarquia"], 3), m[0]["nombre"]))
+        # «CERRITO» se muestra como su cabecera, «El Cerrito»; «TRES PALMAS» no pasa a «3 Palmas»
+        cab = ms[0][0]["nombre"] if ms[0][0]["tipo"] == "Cabecera de corregimiento" else ""
+        nombre = cab if cab and not cab[0].isdigit() and fichas(cab)[-1:] == fichas(clave)[-1:] and len(cab) > len(clave) else titulo(clave)
+        for m in ms:
+            m[0]["corregimiento"] = nombre
+        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": ms[0][1]}, "properties": {
+            "capa": "corregimiento", "nombre": nombre,
+            "centros": [{"nombre": m[0]["nombre"], "tipo": m[0]["tipo"], "jerarquia": m[0]["jerarquia"],
+                         "hectareas": m[0]["hectareas"], "punto": m[1]} for m in ms]}})
+    fuente = {"id": "2536664f628c4b42b3422f894b053252",
+              "nombre": "POT de Montería · Delimitación de centros poblados y límite municipal",
+              "entidad": "Alcaldía de Montería (POT, Acuerdo 003 de 2021), publicado en ArcGIS Online por el proyecto APPA Córdoba",
+              "licencia": "Sin licencia declarada; se cita a la Alcaldía como autora. El límite municipal advierte que no sirve "
+                          "para ubicar puntos exactos ni calcular áreas",
+              "actualizado": fecha(centros["fuente"].get("editado")), "descargado": hoy,
+              "url": "https://www.arcgis.com/home/item.html?id=2536664f628c4b42b3422f894b053252",
+              "uso": f"{len(grupos)} corregimientos y {len(centros['features'])} centros poblados (cabeceras y caseríos). "
+                     "No hay límites oficiales de cada corregimiento publicados: se muestran sus centros poblados"}
+    return {"type": "FeatureCollection", "features": feats}, fuente, len(grupos), len(centros["features"])
 
 
 def main():
@@ -162,6 +226,7 @@ def main():
             "detalle": f"{a['categoria']} · Resolución {a['resolucion']} · {a['hectareas_']:,.0f} ha · RUNAP"}})
 
     hoy = date.today().isoformat()
+    corr, fuente_pot, n_corr, n_centros = corregimientos(hoy)
     cvs_uso = ("Uso permitido citando a la CVS como autora (restricciones de uso del geoportal); "
                "geometrías simplificadas a ~20 m para el visor")
     manifiesto = {
@@ -185,6 +250,7 @@ def main():
              "entidad": "CVS, con información del RUNAP (Parques Nacionales Naturales)", "licencia": cvs_uso,
              "actualizado": fecha(runap["fuente"].get("editado")), "descargado": hoy,
              "url": "https://inicio-sigcvs.hub.arcgis.com", "uso": f"{len(runap['features'])} polígonos alrededor de Montería · lente Ambiente"},
+            fuente_pot,
         ],
         "no_disponibles": [
             "Alcaldía de Montería · Geoposicionamiento de instituciones educativas (ew4g-9n55) y Zonas Wifi (qyrr-zx9j): "
@@ -199,6 +265,7 @@ def main():
         (DATA / "equipamientos.geojson").write_text(json.dumps(equip, ensure_ascii=False), encoding="utf-8")
     (DATA / "oficial_sedes_educativas.geojson").write_text(json.dumps(sedes_geo, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (DATA / "oficial_ambiente.geojson").write_text(json.dumps(amb, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    (DATA / "corregimientos.geojson").write_text(json.dumps(corr, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (DATA / "fuentes_oficiales.json").write_text(json.dumps(manifiesto, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print(f"Sin nombre en OSM: {len(sin_nombre)} · resueltos: {cruce['resueltos']} · dudosos descartados: {cruce['dudosos']}")
@@ -206,6 +273,7 @@ def main():
         print(f"  {c['fuente']} ({c['categoria']}): {c['candidatos_osm']} candidatos, {c['resueltos']} resueltos · {c['motivo']}")
     print(f"MinEducación: {len(sedes)} sedes con coordenadas · {en_osm} ya en OSM · {len(faltan)} faltan → {len(celdas)} puntos publicados")
     print(f"CVS: {len(hum['features'])} humedales con PMA · {len(runap['features'])} áreas protegidas RUNAP")
+    print(f"POT: {n_corr} corregimientos · {n_centros} centros poblados")
 
 
 if __name__ == "__main__":

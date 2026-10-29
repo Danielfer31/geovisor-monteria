@@ -40,6 +40,16 @@
    "descargado": "2026-10-29",
    "url": "https://inicio-sigcvs.hub.arcgis.com",
    "uso": "2 polígonos alrededor de Montería · lente Ambiente"
+  },
+  {
+   "id": "2536664f628c4b42b3422f894b053252",
+   "nombre": "POT de Montería · Delimitación de centros poblados y límite municipal",
+   "entidad": "Alcaldía de Montería (POT, Acuerdo 003 de 2021), publicado en ArcGIS Online por el proyecto APPA Córdoba",
+   "licencia": "Sin licencia declarada; se cita a la Alcaldía como autora. El límite municipal advierte que no sirve para ubicar puntos exactos ni calcular áreas",
+   "actualizado": "2025-03-14",
+   "descargado": "2026-10-29",
+   "url": "https://www.arcgis.com/home/item.html?id=2536664f628c4b42b3422f894b053252",
+   "uso": "28 corregimientos y 63 centros poblados (cabeceras y caseríos). No hay límites oficiales de cada corregimiento publicados: se muestran sus centros poblados"
   }
  ],
  "no_disponibles": [

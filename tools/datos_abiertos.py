@@ -4,6 +4,7 @@ Uso (desde la raíz del repositorio, con acceso a www.datos.gov.co y api.us.socr
     python3 tools/datos_abiertos.py catalogo     # lista conjuntos de Montería, Córdoba y la CVS
     python3 tools/datos_abiertos.py descargar    # baja los conjuntos de CONJUNTOS filtrados a Montería
     python3 tools/datos_abiertos.py cvs          # baja capas ambientales del geoportal de la CVS (ArcGIS)
+    python3 tools/datos_abiertos.py pot          # baja centros poblados del POT y el límite municipal (ArcGIS)
 
 Escribe en fuentes_abiertas/ (crudo, para revisar) y no toca data/: la integración al visor
 se hace después de revisar columnas y cobertura de cada conjunto.
@@ -47,6 +48,16 @@ CVS_CAPAS = {
 }
 # Cabecera de Montería con margen; se baja cada polígono completo que la toque.
 CVS_ENVOLVENTE = "-75.97,8.66,-75.78,8.87"
+
+# Capas del POT de Montería (Acuerdo 003 de 2021) que la Alcaldía entregó al proyecto APPA Córdoba y
+# que este publicó en ArcGIS Online (ítem 2536664f628c4b42b3422f894b053252). Sin licencia declarada.
+# OSM no tiene los límites de los corregimientos; la capa «UPR _Corregimientos» del mismo servicio
+# solo cubre la unidad de planificación rural del oriente, así que se usan los centros poblados.
+POT_SERVICIO = "https://services.arcgis.com/wLfHepIACaM0pwj9/arcgis/rest/services/ID_5434_POT_Monteria_WFL1/FeatureServer"
+POT_CAPAS = {
+    "pot_centros_poblados": (14, "1=1", 0.00005),
+    "pot_limite_municipal": (30, "MpCodigo='23001'", 0.0005),
+}
 
 # En orden de preferencia: en el REPS, municipiosede es el código DANE y municipiosededesc el nombre.
 COLUMNAS_MUNICIPIO = ("municipiosededesc", "nombremunicipio", "municipio", "nombre_municipio", "municipio_sede", "nommunicipio", "mpio")
@@ -140,5 +151,19 @@ def cvs():
         print(f"{nombre}: {len(geo.get('features', []))} polígonos → {ruta.relative_to(RAIZ)}")
 
 
+def pot():
+    SALIDA.mkdir(exist_ok=True)
+    for nombre, (capa, where, tolerancia) in POT_CAPAS.items():
+        url = f"{POT_SERVICIO}/{capa}"
+        meta = pedir(url + "?f=json")
+        consulta = urllib.parse.urlencode({"where": where, "outFields": "*", "outSR": 4326, "f": "geojson",
+                                           "maxAllowableOffset": tolerancia, "geometryPrecision": 5})
+        geo = pedir(f"{url}/query?{consulta}")
+        geo["fuente"] = {"servicio": url, "titulo": meta.get("name"), "editado": (meta.get("editingInfo") or {}).get("lastEditDate")}
+        ruta = SALIDA / f"{nombre}.geojson"
+        ruta.write_text(json.dumps(geo, ensure_ascii=False), encoding="utf-8")
+        print(f"{nombre}: {len(geo.get('features', []))} polígonos → {ruta.relative_to(RAIZ)}")
+
+
 if __name__ == "__main__":
-    {"catalogo": catalogo, "descargar": descargar, "cvs": cvs}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: print(__doc__))()
+    {"catalogo": catalogo, "descargar": descargar, "cvs": cvs, "pot": pot}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: print(__doc__))()

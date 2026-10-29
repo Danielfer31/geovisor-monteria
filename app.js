@@ -157,6 +157,18 @@
     area_protegida: { color: "#A3E635", nombre: "Área protegida RUNAP · CVS" },
     sedes: "#4FC3F7"
   };
+  // Zona rural: centros poblados del POT agrupados por corregimiento
+  var CORR = { color: "#FDBA74", limite: "#FBFAF6" };
+  var CAPAS_CORR = ["corr-limite", "corr-centros", "corr-centros-borde", "corr-puntos", "corr-etiquetas"];
+  function corregimientos() { return datos.corregimientos.features.filter(function (f) { return f.properties.capa === "corregimiento"; }); }
+  function limitesMunicipio() {
+    var b = new maplibregl.LngLatBounds();
+    datos.corregimientos.features.forEach(function (f) {
+      if (f.properties.capa !== "limite") return;
+      (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates).forEach(function (pol) { pol[0].forEach(function (q) { b.extend(q); }); });
+    });
+    return b.isEmpty() ? null : b;
+  }
   function estiloBase() {
     return {
       version: 8,
@@ -241,11 +253,14 @@
     var b = new maplibregl.LngLatBounds();
     datos.manzanas.features.forEach(function (f) { f.geometry.coordinates[0].forEach(function (p) { b.extend(p); }); });
     estado.limites = b;
+    // El límite del mapa abarca todo el municipio para poder recorrer los corregimientos
+    var lim = limitesMunicipio(), m = new maplibregl.LngLatBounds(b.getSouthWest(), b.getNorthEast());
+    if (lim) m.extend(lim);
     mapa = new maplibregl.Map({
       container: "mapa",
       style: estiloBase(),
       bounds: b, fitBoundsOptions: { padding: paddingMapa() },
-      maxBounds: [[b.getWest() - 0.35, b.getSouth() - 0.3], [b.getEast() + 0.35, b.getNorth() + 0.3]],
+      maxBounds: [[m.getWest() - 0.35, m.getSouth() - 0.3], [m.getEast() + 0.35, m.getNorth() + 0.3]],
       pitch: 55, bearing: -18, maxPitch: 75, attributionControl: false, antialias: true
     });
     mapa.on("error", function (e) { if (console && console.warn) console.warn("Mapa:", e && e.error && e.error.message); });
@@ -275,6 +290,7 @@
     mapa.addSource("obras", { type: "geojson", data: datos.obras });
     mapa.addSource("oficial-ambiente", { type: "geojson", data: datos.oficialAmbiente });
     mapa.addSource("oficial-sedes", { type: "geojson", data: datos.oficialSedes });
+    mapa.addSource("corregimientos", { type: "geojson", data: datos.corregimientos });
 
     mapa.addLayer({ id: "perimetro-brillo", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 8, "line-blur": 8, "line-opacity": 0.35 } });
     mapa.addLayer({ id: "perimetro", type: "line", source: "perimetro", paint: { "line-color": COLORES.cian, "line-width": 1.2, "line-opacity": 0.8 } });
@@ -295,6 +311,13 @@
       paint: { "fill-color": colorOficial, "fill-opacity": 0.16 } });
     mapa.addLayer({ id: "oficial-ambiente-borde", type: "line", source: "oficial-ambiente", layout: { visibility: visAmbiente },
       paint: { "line-color": colorOficial, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 15, 2.6], "line-opacity": 0.95 } });
+    var capa = function (c) { return ["==", ["get", "capa"], c]; };
+    mapa.addLayer({ id: "corr-limite", type: "line", source: "corregimientos", filter: capa("limite"),
+      paint: { "line-color": CORR.limite, "line-width": 1.4, "line-opacity": 0.55, "line-dasharray": [4, 3] } });
+    mapa.addLayer({ id: "corr-centros", type: "fill", source: "corregimientos", filter: capa("centro"),
+      paint: { "fill-color": CORR.color, "fill-opacity": 0.35 } });
+    mapa.addLayer({ id: "corr-centros-borde", type: "line", source: "corregimientos", filter: capa("centro"),
+      paint: { "line-color": CORR.color, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.8, 15, 2] } });
     mapa.addLayer({
       id: "manzanas", type: "fill-extrusion", source: "manzanas",
       paint: {
@@ -329,14 +352,24 @@
     mapa.on("click", function (e) { if (clicSimulador(e)) e.preventDefault(); });
     mapa.on("click", "manzanas", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos"] }).length) return;
       seleccionarManzana(e.features[0].properties);
     });
-    ["obras", "equipamientos", "oficial-sedes"].forEach(function (capa) {
+    ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "corr-centros"].forEach(function (capa) {
       mapa.on("mouseenter", capa, function () { mapa.getCanvas().style.cursor = "pointer"; });
       mapa.on("mouseleave", capa, function () { mapa.getCanvas().style.cursor = ""; });
     });
+    mapa.addLayer({ id: "corr-puntos", type: "circle", source: "corregimientos", filter: capa("corregimiento"), maxzoom: 13, paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 12, 6], "circle-color": CORR.color,
+      "circle-stroke-color": "#000B22", "circle-stroke-width": 1.5 } });
+    mapa.addLayer({ id: "corr-etiquetas", type: "symbol", source: "corregimientos", filter: capa("corregimiento"), minzoom: 9.2, maxzoom: 13.5,
+      layout: { "text-field": ["get", "nombre"], "text-font": ["Noto Sans Regular"], "text-size": 12, "text-anchor": "top", "text-offset": [0, 0.7] },
+      paint: { "text-color": CORR.color, "text-halo-color": "#000B22", "text-halo-width": 1.5 } });
     mapa.on("click", "obras", function (e) { mostrarObra(e.features[0]); });
+    mapa.on("click", "corr-puntos", function (e) {
+      if (estado.simulando) return;
+      mostrarPestana("territorio"); pintarCorregimiento(e.features[0].properties.nombre);
+    });
     mapa.on("click", "equipamientos", function (e) {
       if (estado.simulando) return;
       popup(e.features[0].geometry.coordinates, fichaEquipamiento(e.features[0]));
@@ -422,7 +455,7 @@
     var tip = $("#tooltip"), escritorio = window.matchMedia("(hover: hover)").matches;
     mapa.on("mousemove", function (e) {
       if (!escritorio) return;
-      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "manzanas", "oficial-ambiente"].concat(CAPAS_ECO) })[0];
+      var f = mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "manzanas", "corr-centros", "oficial-ambiente"].concat(CAPAS_ECO) })[0];
       if (!f) { tip.hidden = true; return; }
       var html;
       if (f.layer.id === "manzanas") {
@@ -435,6 +468,10 @@
         html = "<b>" + escapar(nombreEquipamiento(f.properties)) + "</b><span>" + escapar(CATEGORIAS[f.properties.categoria] || "") + (f.properties.nombre ? "" : " · falta el nombre en OSM") + "</span>";
       } else if (f.layer.id === "oficial-sedes") {
         html = "<b>" + (f.properties.n > 1 ? num(f.properties.n) + " sedes educativas" : "Sede educativa") + "</b><span>MinEducación · ubicación aproximada · clic para ver</span>";
+      } else if (f.layer.id === "corr-puntos") {
+        html = "<b>" + escapar(f.properties.nombre) + "</b><span>Corregimiento · clic para ver sus centros poblados</span>";
+      } else if (f.layer.id === "corr-centros") {
+        html = "<b>" + escapar(f.properties.nombre) + "</b><span>" + escapar(f.properties.tipo) + " · " + escapar(f.properties.corregimiento) + "</span>";
       } else if (f.layer.id === "oficial-ambiente") {
         html = "<b>" + escapar(f.properties.nombre) + "</b><span>" + escapar(OFICIAL[f.properties.capa].nombre) + "</span>";
       } else {
@@ -459,7 +496,9 @@
 
     mapa.on("click", function (e) {
       if (estado.simulando) return;
-      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "manzanas"] }).length) return;
+      if (mapa.queryRenderedFeatures(e.point, { layers: ["obras", "equipamientos", "oficial-sedes", "corr-puntos", "manzanas"] }).length) return;
+      var cp = mapa.queryRenderedFeatures(e.point, { layers: ["corr-centros"] })[0];
+      if (cp) { popup(e.lngLat, fichaCentroPoblado(cp.properties)); return; }
       var o = mapa.queryRenderedFeatures(e.point, { layers: ["oficial-ambiente"] })[0];
       if (o) { popup(e.lngLat, fichaAmbienteOficial(o)); return; }
       var f = mapa.queryRenderedFeatures(e.point, { layers: CAPAS_ECO })[0];
@@ -572,7 +611,7 @@
       b.addEventListener("click", function () {
         var on = b.getAttribute("aria-pressed") !== "true";
         b.setAttribute("aria-pressed", on ? "true" : "false");
-        var capas = { equipamientos: ["equipamientos"], sedes: ["oficial-sedes"], obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
+        var capas = { equipamientos: ["equipamientos"], sedes: ["oficial-sedes"], corregimientos: CAPAS_CORR, obras: ["obras", "obras-halo"], comunas: ["comunas"] }[b.dataset.capa];
         capas.forEach(function (c) { mapa.setLayoutProperty(c, "visibility", on ? "visible" : "none"); });
       });
     });
@@ -688,6 +727,65 @@
       ]));
     });
     cont.appendChild(el("p", { class: "fuente", texto: "Seleccione una manzana en el mapa para ver su ficha. Censo DANE 2018; comunas de OpenStreetMap (no oficiales)." }));
+    var corrs = corregimientos();
+    if (corrs.length) {
+      cont.appendChild(el("h4", { class: "rotulo", texto: "Zona rural · " + num(corrs.length) + " corregimientos" }));
+      cont.appendChild(herramientas([["Ver todo el municipio", verMunicipio]]));
+      corrs.slice().sort(function (a, b) { return a.properties.nombre.localeCompare(b.properties.nombre, "es"); }).forEach(function (f) {
+        var cs = centrosDe(f);
+        cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () { pintarCorregimiento(f.properties.nombre); } }, [
+          el("div", { class: "titulo", texto: f.properties.nombre }),
+          el("div", { class: "meta", texto: num(cs.length) + (cs.length === 1 ? " centro poblado" : " centros poblados") +
+            (cs.length > 1 ? " · " + cs.slice(1, 4).map(function (c) { return c.nombre; }).join(", ") + (cs.length > 4 ? "…" : "") : "") })
+        ]));
+      });
+      cont.appendChild(el("p", { class: "fuente", texto: "Centros poblados delimitados en el POT de Montería (Acuerdo 003 de 2021). No hay límites oficiales publicados de cada corregimiento." }));
+    }
+    v.appendChild(cont);
+  }
+
+  // ---------- Corregimientos ----------
+  // MapLibre entrega las propiedades anidadas como texto JSON
+  function centrosDe(f) { var c = f.properties.centros; return typeof c === "string" ? JSON.parse(c) : c; }
+  function verMunicipio() {
+    var lim = limitesMunicipio();
+    if (lim) mapa.fitBounds(lim, { padding: paddingMapa(), pitch: 0, bearing: 0, duration: 1600 });
+  }
+  var JERARQUIA = { Principal: "principal", Intermedio: "intermedia", Secundario: "secundaria" };
+  function jerarquia(j) { return "jerarquía " + (JERARQUIA[j] || String(j).toLowerCase()); }
+  function fichaCentroPoblado(p) {
+    return "<b>" + escapar(p.nombre) + "</b><br><span style='color:" + CORR.color + "'>" + escapar(p.tipo) + " · corregimiento " + escapar(p.corregimiento) + "</span><br>" +
+      "<span style='color:#93A6C4'>" + escapar(jerarquia(p.jerarquia)) + " · " + num(p.hectareas) + " ha · POT de Montería</span>";
+  }
+  function pintarCorregimiento(nombre) {
+    var f = corregimientos().filter(function (x) { return x.properties.nombre === nombre; })[0];
+    if (!f) return;
+    limpiarSeleccion();
+    estado.comunaVista = null;
+    marcarComuna(null);
+    var cs = centrosDe(f), b = new maplibregl.LngLatBounds();
+    cs.forEach(function (c) { b.extend(c.punto); });
+    mapa.fitBounds(b, { padding: paddingMapa(), maxZoom: 13.5, pitch: estado.tres_d ? 45 : 0, duration: 1600 });
+    var v = $("#vista-territorio");
+    v.innerHTML = "";
+    var cont = el("div", { class: "aparecer" }, [
+      volver(),
+      el("div", { class: "rotulo", texto: "Corregimiento" }),
+      el("h3", { texto: nombre }),
+      el("div", { class: "subtitulo", texto: "Zona rural de Montería · " + num(cs.length) + (cs.length === 1 ? " centro poblado" : " centros poblados") }),
+      el("h4", { class: "rotulo", texto: "Centros poblados" })
+    ]);
+    cs.forEach(function (c) {
+      cont.appendChild(el("button", { class: "tarjeta", type: "button", onclick: function () {
+        mapa.flyTo({ center: c.punto, zoom: 15, pitch: estado.tres_d ? 50 : 0, duration: 1400 });
+        popup(c.punto, fichaCentroPoblado({ nombre: c.nombre, tipo: c.tipo, corregimiento: nombre, jerarquia: c.jerarquia, hectareas: c.hectareas }));
+      } }, [
+        el("div", { class: "titulo", texto: c.nombre }),
+        el("div", { class: "meta", texto: c.tipo + " · " + jerarquia(c.jerarquia) + " · " + num(c.hectareas) + " ha" })
+      ]));
+    });
+    cont.appendChild(aviso("Los datos por manzana del visor (Censo DANE 2018) solo cubren la cabecera urbana. Aquí se muestran los centros poblados delimitados en el POT; no hay un límite oficial publicado para cada corregimiento."));
+    cont.appendChild(el("p", { class: "fuente", texto: "Fuente: Alcaldía de Montería, POT (Acuerdo 003 de 2021), capas publicadas en ArcGIS Online por el proyecto APPA Córdoba." }));
     v.appendChild(cont);
   }
   function barraPct(etq, pct) {
@@ -942,6 +1040,10 @@
       if (f.properties.nombre) indice.push({ tipo: CATEGORIAS[f.properties.categoria] || "Equipamiento", nombre: f.properties.nombre, coords: f.geometry.coordinates, zoom: 16.5 });
     });
     datos.obras.features.forEach(function (f) { indice.push({ tipo: "Obra", nombre: f.properties.nombre, obra: f }); });
+    corregimientos().forEach(function (f) {
+      indice.push({ tipo: "Corregimiento", nombre: f.properties.nombre, corregimiento: f.properties.nombre });
+      centrosDe(f).slice(1).forEach(function (c) { indice.push({ tipo: "Caserío · " + f.properties.nombre, nombre: c.nombre, coords: c.punto, zoom: 15 }); });
+    });
     indice.forEach(function (x) { x.clave = normalizar(x.nombre); });
   }
   function abrirBuscador() { $("#buscador").hidden = false; $("#q").value = ""; buscar(); $("#q").focus(); }
@@ -963,6 +1065,7 @@
     cerrarBuscador();
     if (x.comuna) { mostrarPestana("territorio"); pintarComuna(x.comuna); return; }
     if (x.obra) { mostrarPestana("obras"); mostrarObra(x.obra); return; }
+    if (x.corregimiento) { mostrarPestana("territorio"); pintarCorregimiento(x.corregimiento); return; }
     mapa.flyTo({ center: x.coords, zoom: x.zoom, pitch: estado.tres_d ? 60 : 0, duration: 1600 });
     popup(x.coords, "<b>" + escapar(x.nombre) + "</b><br><span style='color:#93A6C4'>" + escapar(x.tipo) + "</span>");
   }
@@ -1492,10 +1595,10 @@
     cargar("data/contexto.json"), cargar("data/manzanas.geojson"), cargar("data/equipamientos.geojson"),
     cargar("data/obras.geojson"), cargar("data/resumen.json"),
     opcional("data/fuentes_oficiales.json", {}), opcional("data/oficial_sedes_educativas.geojson", VACIA),
-    opcional("data/oficial_ambiente.geojson", VACIA)
+    opcional("data/oficial_ambiente.geojson", VACIA), opcional("data/corregimientos.geojson", VACIA)
   ]).then(function (r) {
     datos = { contexto: r[0], manzanas: r[1], equipamientos: r[2], obras: r[3], resumen: r[4],
-      oficiales: r[5], oficialSedes: r[6], oficialAmbiente: r[7] };
+      oficiales: r[5], oficialSedes: r[6], oficialAmbiente: r[7], corregimientos: r[8] };
     calcularIndice();
     calcularCortes();
     pintarKpis(); pintarLentes(); enlazarControles(); pintarFuentes();
