@@ -1,0 +1,11 @@
+name = "geovisor-monteria-asistente"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Orígenes que pueden llamar al asistente, separados por comas.
+ORIGENES_PERMITIDOS = "https://danielfer31.github.io,https://raw.githack.com"
+
+# La clave de la API no va aquí. Se guarda como secreto:
+#   npx wrangler secret put ANTHROPIC_API_KEY

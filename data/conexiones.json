@@ -1,0 +1,493 @@
+{
+ "generado": "2026-10-29",
+ "corredores": [
+  {
+   "nombre": "Ruta 21 · Cereté y Lorica",
+   "tramos": [
+    {
+     "codigo": "2103",
+     "sector": "Montería - Cereté",
+     "km": 6.9,
+     "administrador": "INVÍAS"
+    },
+    {
+     "codigo": "2103",
+     "sector": "Paso Nacional por Cereté",
+     "km": 3.8,
+     "administrador": "INVÍAS"
+    },
+    {
+     "codigo": "2103",
+     "sector": "Cereté - Lorica",
+     "km": 37.5,
+     "administrador": "ANI"
+    }
+   ],
+   "hitos": [
+    {
+     "lugar": "Cereté",
+     "km": 6.9
+    },
+    {
+     "lugar": "Lorica",
+     "km": 48.2
+    }
+   ]
+  },
+  {
+   "nombre": "Ruta 74 · Cereté y la Troncal de Occidente",
+   "tramos": [
+    {
+     "codigo": "2103",
+     "sector": "Montería - Cereté",
+     "km": 6.9,
+     "administrador": "INVÍAS"
+    },
+    {
+     "codigo": "7402",
+     "sector": "Cereté - Cruce Ruta 25 (La Ye)",
+     "km": 35.0,
+     "administrador": "INVÍAS"
+    }
+   ],
+   "hitos": [
+    {
+     "lugar": "Cereté",
+     "km": 6.9
+    },
+    {
+     "lugar": "Cruce con la Troncal de Occidente (La Ye)",
+     "km": 41.9
+    }
+   ]
+  },
+  {
+   "nombre": "Ruta 23 · Planeta Rica",
+   "tramos": [
+    {
+     "codigo": "2310",
+     "sector": "Planeta Rica - Montería",
+     "km": 49.0,
+     "administrador": "ANI"
+    }
+   ],
+   "hitos": [
+    {
+     "lugar": "Planeta Rica",
+     "km": 49.0
+    }
+   ]
+  },
+  {
+   "nombre": "Ruta 74 · Puerto Rey y Arboletes",
+   "tramos": [
+    {
+     "codigo": "7401",
+     "sector": "Puerto Rey - Monteria",
+     "km": 63.5,
+     "administrador": "ANI"
+    },
+    {
+     "codigo": "9002",
+     "sector": "Arboletes – Puerto Rey",
+     "km": 4.9,
+     "administrador": "INVÍAS"
+    }
+   ],
+   "hitos": [
+    {
+     "lugar": "Puerto Rey",
+     "km": 63.5
+    },
+    {
+     "lugar": "Arboletes",
+     "km": 68.4
+    }
+   ]
+  }
+ ],
+ "terminal": {
+  "nombre": "Terminal de Transporte de Montería",
+  "anio": 2025,
+  "despachos": 209476,
+  "pasajeros": 1824954,
+  "destinos": [
+   {
+    "divipola": "23807",
+    "nombre": "Tierralta",
+    "departamento": "Córdoba",
+    "despachos": 21592,
+    "pasajeros": 224704
+   },
+   {
+    "divipola": "23417",
+    "nombre": "Lorica",
+    "departamento": "Córdoba",
+    "despachos": 20878,
+    "pasajeros": 170280,
+    "km_red_nacional": 48.2
+   },
+   {
+    "divipola": "70001",
+    "nombre": "Sincelejo",
+    "departamento": "Sucre",
+    "despachos": 17969,
+    "pasajeros": 99476
+   },
+   {
+    "divipola": "23555",
+    "nombre": "Planeta Rica",
+    "departamento": "Córdoba",
+    "despachos": 16821,
+    "pasajeros": 163444,
+    "km_red_nacional": 49.0
+   },
+   {
+    "divipola": "05045",
+    "nombre": "Apartadó",
+    "departamento": "Antioquia",
+    "despachos": 16122,
+    "pasajeros": 120437
+   },
+   {
+    "divipola": "08001",
+    "nombre": "Barranquilla",
+    "departamento": "Atlántico",
+    "despachos": 14749,
+    "pasajeros": 128781
+   },
+   {
+    "divipola": "13001",
+    "nombre": "Cartagena de Indias",
+    "departamento": "Bolívar",
+    "despachos": 12526,
+    "pasajeros": 122893
+   },
+   {
+    "divipola": "05051",
+    "nombre": "Arboletes",
+    "departamento": "Antioquia",
+    "despachos": 10280,
+    "pasajeros": 27930,
+    "km_red_nacional": 68.4
+   },
+   {
+    "divipola": "23466",
+    "nombre": "Montelíbano",
+    "departamento": "Córdoba",
+    "despachos": 10218,
+    "pasajeros": 110738
+   },
+   {
+    "divipola": "05154",
+    "nombre": "Caucasia",
+    "departamento": "Antioquia",
+    "despachos": 9931,
+    "pasajeros": 106063
+   },
+   {
+    "divipola": "05001",
+    "nombre": "Medellín",
+    "departamento": "Antioquia",
+    "despachos": 9482,
+    "pasajeros": 153797
+   },
+   {
+    "divipola": "23162",
+    "nombre": "Cereté",
+    "departamento": "Córdoba",
+    "despachos": 9404,
+    "pasajeros": 4128,
+    "km_red_nacional": 6.9
+   },
+   {
+    "divipola": "23660",
+    "nombre": "Sahagún",
+    "departamento": "Córdoba",
+    "despachos": 5582,
+    "pasajeros": 22558
+   },
+   {
+    "divipola": "23855",
+    "nombre": "Valencia",
+    "departamento": "Córdoba",
+    "despachos": 5544,
+    "pasajeros": 37126
+   },
+   {
+    "divipola": "23500",
+    "nombre": "Moñitos",
+    "departamento": "Córdoba",
+    "despachos": 3434,
+    "pasajeros": 36901
+   },
+   {
+    "divipola": "05837",
+    "nombre": "Turbo",
+    "departamento": "Antioquia",
+    "despachos": 3276,
+    "pasajeros": 34400
+   },
+   {
+    "divipola": "23574",
+    "nombre": "Puerto Escondido",
+    "departamento": "Córdoba",
+    "despachos": 3231,
+    "pasajeros": 9919
+   },
+   {
+    "divipola": "23464",
+    "nombre": "Momil",
+    "departamento": "Córdoba",
+    "despachos": 2694,
+    "pasajeros": 30531
+   },
+   {
+    "divipola": "23580",
+    "nombre": "Puerto Libertador",
+    "departamento": "Córdoba",
+    "despachos": 2692,
+    "pasajeros": 42957
+   },
+   {
+    "divipola": "11001",
+    "nombre": "Bogotá, D.C.",
+    "departamento": "Bogotá, D.C.",
+    "despachos": 2659,
+    "pasajeros": 47664
+   },
+   {
+    "divipola": "23068",
+    "nombre": "Ayapel",
+    "departamento": "Córdoba",
+    "despachos": 2226,
+    "pasajeros": 37603
+   },
+   {
+    "divipola": "20001",
+    "nombre": "Valledupar",
+    "departamento": "Cesar",
+    "despachos": 1742,
+    "pasajeros": 23597
+   },
+   {
+    "divipola": "44430",
+    "nombre": "Maicao",
+    "departamento": "La Guajira",
+    "despachos": 1586,
+    "pasajeros": 22248
+   },
+   {
+    "divipola": "23675",
+    "nombre": "San Bernardo del Viento",
+    "departamento": "Córdoba",
+    "despachos": 1393,
+    "pasajeros": 12666
+   },
+   {
+    "divipola": "23001",
+    "nombre": "Montería",
+    "departamento": "Córdoba",
+    "despachos": 753,
+    "pasajeros": 10351
+   },
+   {
+    "divipola": "23168",
+    "nombre": "Chimá",
+    "departamento": "Córdoba",
+    "despachos": 742,
+    "pasajeros": 9350
+   },
+   {
+    "divipola": "23090",
+    "nombre": "Canalete",
+    "departamento": "Córdoba",
+    "despachos": 609,
+    "pasajeros": 3617
+   },
+   {
+    "divipola": "70708",
+    "nombre": "San Marcos",
+    "departamento": "Sucre",
+    "despachos": 536,
+    "pasajeros": 1939
+   },
+   {
+    "divipola": "05490",
+    "nombre": "Necoclí",
+    "departamento": "Antioquia",
+    "despachos": 374,
+    "pasajeros": 5088
+   },
+   {
+    "divipola": "68001",
+    "nombre": "Bucaramanga",
+    "departamento": "Santander",
+    "despachos": 215,
+    "pasajeros": 3045
+   },
+   {
+    "divipola": "13430",
+    "nombre": "Magangué",
+    "departamento": "Bolívar",
+    "despachos": 181,
+    "pasajeros": 459
+   },
+   {
+    "divipola": "23672",
+    "nombre": "San Antero",
+    "departamento": "Córdoba",
+    "despachos": 22,
+    "pasajeros": 213
+   },
+   {
+    "divipola": "23182",
+    "nombre": "Chinú",
+    "departamento": "Córdoba",
+    "despachos": 13,
+    "pasajeros": 51
+   }
+  ]
+ },
+ "aereo": {
+  "nombre": "Los Garzones (Montería)",
+  "anio": 2025,
+  "pasajeros": 704871,
+  "nacionales": [
+   {
+    "codigo": "BOG",
+    "ciudad": "Bogotá, D.C.",
+    "pasajeros": 425978
+   },
+   {
+    "codigo": "MDE",
+    "ciudad": "Rionegro - Antioquia",
+    "pasajeros": 168684
+   },
+   {
+    "codigo": "EOH",
+    "ciudad": "Medellín",
+    "pasajeros": 44568
+   },
+   {
+    "codigo": "CLO",
+    "ciudad": "Santiago de Cali",
+    "pasajeros": 14467
+   },
+   {
+    "codigo": "BAQ",
+    "ciudad": "Barranquilla",
+    "pasajeros": 6769
+   },
+   {
+    "codigo": "BGA",
+    "ciudad": "Bucaramanga",
+    "pasajeros": 6075
+   },
+   {
+    "codigo": "PEI",
+    "ciudad": "Pereira",
+    "pasajeros": 6065
+   },
+   {
+    "codigo": "CUC",
+    "ciudad": "San José de Cúcuta",
+    "pasajeros": 5265
+   },
+   {
+    "codigo": "PSO",
+    "ciudad": "Pasto",
+    "pasajeros": 3485
+   },
+   {
+    "codigo": "AXM",
+    "ciudad": "Armenia",
+    "pasajeros": 3247
+   },
+   {
+    "codigo": "ADZ",
+    "ciudad": "San Andres - Isla",
+    "pasajeros": 2048
+   },
+   {
+    "codigo": "VUP",
+    "ciudad": "Valledupar",
+    "pasajeros": 1216
+   },
+   {
+    "codigo": "SMR",
+    "ciudad": "Santa Marta",
+    "pasajeros": 1203
+   },
+   {
+    "codigo": "CTG",
+    "ciudad": "Cartagena de Indias",
+    "pasajeros": 979
+   },
+   {
+    "codigo": "EJA",
+    "ciudad": "Barrancabermeja",
+    "pasajeros": 819
+   },
+   {
+    "codigo": "RCH",
+    "ciudad": "Riohacha",
+    "pasajeros": 776
+   },
+   {
+    "codigo": "AUC",
+    "ciudad": "Arauca",
+    "pasajeros": 117
+   },
+   {
+    "codigo": "UIB",
+    "ciudad": "Quibdó",
+    "pasajeros": 100
+   },
+   {
+    "codigo": "LET",
+    "ciudad": "Leticia",
+    "pasajeros": 33
+   },
+   {
+    "codigo": "VVC",
+    "ciudad": "Villavicencio",
+    "pasajeros": 6
+   },
+   {
+    "codigo": "APO",
+    "ciudad": "Carepa",
+    "pasajeros": 6
+   },
+   {
+    "codigo": "MVP",
+    "ciudad": "Mitú",
+    "pasajeros": 2
+   },
+   {
+    "codigo": "CZU",
+    "ciudad": "Corozal",
+    "pasajeros": 2
+   },
+   {
+    "codigo": "BSC",
+    "ciudad": "Bahía Solano",
+    "pasajeros": 2
+   },
+   {
+    "codigo": "CBR",
+    "ciudad": "El Carmen de Bolívar",
+    "pasajeros": 0
+   },
+   {
+    "codigo": "GYM",
+    "ciudad": "Chía",
+    "pasajeros": 0
+   }
+  ],
+  "internacionales": {
+   "pasajeros": 12959,
+   "destinos": 47
+  }
+ }
+}
