@@ -50,12 +50,78 @@
    "descargado": "2026-10-29",
    "url": "https://www.arcgis.com/home/item.html?id=2536664f628c4b42b3422f894b053252",
    "uso": "28 corregimientos y 63 centros poblados (cabeceras y caseríos). No hay límites oficiales de cada corregimiento publicados: se muestran sus centros poblados"
+  },
+  {
+   "id": "ie7y-asdn",
+   "nombre": "INVÍAS · Red vial nacional",
+   "entidad": "Instituto Nacional de Vías - INVÍAS, Bogotá D.C.",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2026-10-19",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/ie7y-asdn",
+   "uso": "29 tramos alrededor de Montería. Longitudes según los postes de referencia (PR): en doble calzada la geometría incluye las dos calzadas y su longitud se duplica. Atributos «por definir» en la fuente no se muestran"
+  },
+  {
+   "id": "68qj-5xux",
+   "nombre": "INVÍAS · Peajes de la red vial nacional",
+   "entidad": "Instituto Nacional de Vías - INVÍAS, Bogotá D.C.",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2026-10-19",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/68qj-5xux",
+   "uso": "9 peajes alrededor de Montería con su tarifa de categoría I"
+  },
+  {
+   "id": "b29447e238b74f69954fcc3513178993",
+   "nombre": "ANI · Concesiones carreteras y aeroportuarias",
+   "entidad": "Agencia Nacional de Infraestructura",
+   "licencia": "Información que puede ser utilizada por entidades u organizaciones de forma pública. La información presente en ningún momento reemplaza la oficialización de información requerida a la Agencia.",
+   "actualizado": "2024-01-09",
+   "descargado": "2026-10-29",
+   "url": "https://www.arcgis.com/home/item.html?id=b29447e238b74f69954fcc3513178993",
+   "uso": "6 concesiones viales en la región con su estado, y la concesión del aeropuerto Los Garzones"
+  },
+  {
+   "id": "eh75-8ah6",
+   "nombre": "SuperTransporte · Despachos de pasajeros por carretera desde las terminales",
+   "entidad": "Superintendencia de Transporte - SUPERTRANSPORTE, Bogotá D.C.",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2026-05-03",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/eh75-8ah6",
+   "uso": "Destinos servidos desde la terminal de Montería en 2025 (33 municipios)"
+  },
+  {
+   "id": "gb6w-ynu4",
+   "nombre": "Aerocivil · Tráfico origen-destino de pasajeros",
+   "entidad": "Unidad Administrativa Especial de Aeronáutica Civil - AEROCIVIL, Bogotá D.C.",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2026-08-06",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/gb6w-ynu4",
+   "uso": "Destinos de los pasajeros que salieron de Los Garzones en 2025 (origen-destino, incluye viajes con conexión)"
+  },
+  {
+   "id": "gdxc-w37w",
+   "nombre": "DANE · DIVIPOLA, códigos de municipios",
+   "entidad": "Departamento Administrativo Nacional de Estadística",
+   "licencia": "CC BY-SA 4.0",
+   "actualizado": "2025-01-24",
+   "descargado": "2026-10-29",
+   "url": "https://www.datos.gov.co/d/gdxc-w37w",
+   "uso": "Nombres de los municipios de destino de la terminal"
   }
  ],
  "no_disponibles": [
   "Alcaldía de Montería · Geoposicionamiento de instituciones educativas (ew4g-9n55) y Zonas Wifi (qyrr-zx9j): enlazados desde monteria.gov.co, pero datos.gov.co responde que ya no existen",
   "MinTIC · Zonas Digitales Urbanas (wg2u-d8ji): sin coordenadas y sin filas para Montería",
-  "CVS · rondas hídricas: el geoportal no las publica como capa descargable"
+  "CVS · rondas hídricas: el geoportal no las publica como capa descargable",
+  "INVÍAS · distancias puerta a puerta: la red vial nacional no incluye los recorridos urbanos (el tramo a Cereté empieza al norte de la ciudad, cerca del aeropuerto), así que el visor solo suma las longitudes oficiales de los tramos",
+  "Vía Montería – Tierralta y demás vías hacia el sur del municipio: no hacen parte de la red vial nacional de INVÍAS, y el inventario SINC de MinTransporte no trae ejes viales de Montería",
+  "Peaje San Carlos (Concesión Ruta al Mar): está en el conjunto de peajes, pero su tramo (3306, Montería – San Carlos) no aparece en la red vial de INVÍAS",
+  "POT de Montería · ejes viales, vías primarias, red secundaria y red terciaria propuesta: sin nombres de vía y sin licencia declarada; no se integran",
+  "Terminal de transporte: ninguna fuente oficial abierta publica su ubicación; el visor usa el punto de OpenStreetMap",
+  "INVÍAS · Variante Oriental de Sincelejo (25SCA): la fuente declara que su geometría viene de Google Maps; no se reproduce"
  ],
  "cruce_sin_nombre": {
   "umbral_m": 75,
