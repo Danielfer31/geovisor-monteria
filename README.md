@@ -82,3 +82,25 @@ python3 tools/integrar_oficiales.py vias    # solo vías y conexiones, sin rehac
 Para verlo localmente, sirva la carpeta con cualquier servidor estático (por ejemplo `python3 -m http.server`) y abra `http://localhost:8000`. El mapa base se carga desde CARTO y OpenStreetMap, por lo que requiere conexión a internet.
 
 Atribución: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL), © [CARTO](https://carto.com/attributions), DANE, Ministerio de Educación Nacional, INVÍAS, SuperTransporte y Aerocivil (CC BY-SA 4.0), Agencia Nacional de Infraestructura (ANI), Corporación Autónoma Regional de los Valles del Sinú y San Jorge (CVS), Alcaldía de Montería (POT).
+
+## Publicación y alojamiento
+
+**Dirección pública:** https://danielfer31.github.io/geovisor-monteria/ (GitHub Pages, desde la rama `main`, carpeta raíz). La versión anterior sigue en `/v1/`.
+
+### Usarlo en la página web del CIIAC
+
+1. **Enlace:** basta con enlazar la dirección pública. Los enlaces con `#…` conservan la vista (lente, comuna, zoom), así que se puede enlazar a una vista concreta.
+2. **Incrustado en una página:**
+   ```html
+   <iframe src="https://danielfer31.github.io/geovisor-monteria/"
+           title="Geovisor Montería" width="100%" height="720"
+           style="border:0" loading="lazy" allow="fullscreen; geolocation"></iframe>
+   ```
+3. **Alojarlo en el propio servidor del CIIAC:** `python3 tools/empaquetar_sitio.py` genera `geovisor-monteria-sitio.zip` con todo lo necesario (unos 3 MB). Se descomprime en cualquier carpeta del hosting; todas las rutas son relativas, así que funciona en la raíz o en una subcarpeta (por ejemplo `ciiac.org/geovisor/`). Es un sitio estático: no necesita base de datos ni servidor de aplicaciones.
+
+### Qué lo mantiene funcionando
+
+- **Incluido en el repositorio:** código, datos, MapLibre GL y las tipografías (SIL OFL 1.1). Nada de esto depende de un tercero.
+- **Servicios externos al abrir la página:** el mapa base vectorial de OpenFreeMap/OpenStreetMap (siempre) y las imágenes satelitales de Esri (solo al elegir «Satélite»). Si alguno desapareciera, el visor seguiría mostrando sus propias capas sobre fondo liso; solo habría que cambiar la dirección del proveedor en `app.js` (`estiloBase` y `montarBase`).
+- **Mientras el repositorio siga público y GitHub Pages activo** (Settings → Pages → rama `main`, carpeta `/`), el sitio se mantiene en línea sin costo. Para tener una copia independiente de GitHub, conserve el `.zip` o suba el repositorio a otro servicio.
+- **Actualizar datos:** `python3 tools/datos_abiertos.py` y `python3 tools/integrar_oficiales.py` regeneran las capas oficiales; después se hace commit a `main` y la página se actualiza sola.
